@@ -1,0 +1,60 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<OutputType>Exe</OutputType>
+		<TargetFramework>net8.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<Authors>Shahriyor</Authors>
+		<Description>
+			DataExportPackage is a .NET library designed to simplify the process of exporting data to various file formats. With DataExportPackage, developers can effortlessly convert their data into formats such as JSON, Word, XML, Excel, CSV, and PDF.
+
+			Key Features:
+			Versatile Data Export: DataExportPackage allows users to export structured data stored in dictionaries to a variety of commonly used file formats.
+
+			Simple Integration: Integration with existing .NET projects is seamless. Developers can quickly incorporate DataExportPackage into their applications to enable data export functionality.
+
+			Multiple Export Formats: DataExportPackage supports exporting data to JSON, Word (DOCX), XML, Excel (XLSX), CSV, and PDF formats, providing flexibility for different use cases and requirements.
+
+			Ease of Use: The library offers intuitive APIs for exporting data, making it easy for developers to generate files in their preferred formats with minimal effort.
+
+			Customization Options: Users have the flexibility to customize export settings and formatting according to their specific needs, ensuring that exported files meet their desired specifications.
+
+			Getting Started:
+			To begin using DataExportPackage in your .NET projects:
+
+			Install the package via NuGet Package Manager:
+
+			Install-Package DataExportPackage
+			Follow the usage examples and documentation provided to seamlessly integrate DataExportPackage into your applications.
+
+			Enjoy the convenience of exporting data to various file formats effortlessly, enhancing the versatility and usability of your applications.
+
+			DataExportPackage simplifies the data export process, empowering .NET developers to efficiently handle data conversion tasks and streamline their workflow.
+		</Description>
+		<PackageIcon>Без названия.jpg</PackageIcon>
+		<PackageReadmeFile>README.md</PackageReadmeFile>
+		<Version>1.0.1</Version>
+		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+		<IncludeSymbols>True</IncludeSymbols>
+		<PackAsTool>True</PackAsTool>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<None Include="..\..\..\Downloads\Без названия.jpg">
+			<Pack>True</Pack>
+			<PackagePath>\</PackagePath>
+		</None>
+		<None Include="C:\Users\Intel Computers\Desktop\README.md">
+			<Pack>True</Pack>
+			<PackagePath>\</PackagePath>
+		</None>
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="ClosedXML" Version="0.102.2" />
+		<PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+		<PackageReference Include="Xceed.Words.NET" Version="3.0.23523.1209" />
+	</ItemGroup>
+
+</Project>
