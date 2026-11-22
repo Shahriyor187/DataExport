@@ -283,20 +283,22 @@ public sealed class DataExporterTests
     [Fact]
     public async Task WriteCsvAsync_StreamsAsynchronousRecords()
     {
-        static async IAsyncEnumerable<(int, string)> Records()
+        static async IAsyncEnumerable<CsvRow> Records()
         {
-            yield return (1, "Amina");
+            yield return new CsvRow(1, "Amina");
             await Task.Yield();
-            yield return (2, "Ali");
+            yield return new CsvRow(2, "Ali");
         }
 
         using var output = new MemoryStream();
         await DataExporter.WriteCsvAsync(Records(), output);
         var csv = System.Text.Encoding.UTF8.GetString(output.ToArray());
-        Assert.Contains("Item1,Item2", csv);
+        Assert.Contains("Id,Name", csv);
         Assert.Contains("1,Amina", csv);
         Assert.Contains("2,Ali", csv);
     }
+
+    private sealed record CsvRow(int Id, string Name);
 
     private static string CreateTempFile(string extension) =>
         Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}{extension}");
