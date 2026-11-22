@@ -8,7 +8,7 @@ A lightweight .NET library for exporting **C# objects, dictionaries, and DataTab
 
 ## Low-memory Excel exports (experimental v2 foundation)
 
-For large database queries, use the **forward-only** Open XML writer instead of `FromObjects(...)` or the existing ClosedXML workbook methods. The API consumes rows incrementally, preserves numeric/Boolean/date values and supports automatic sheet rollover. Supply `Columns` for empty sources or records with inconsistent properties. Memory use is bounded with respect to the number of rows, not necessarily the number or size of individual cells.
+For large database queries, use the **forward-only** Open XML writer instead of `FromObjects(...)` or the existing ClosedXML workbook methods. The API consumes rows incrementally, preserves numeric/Boolean/date values and supports automatic sheet rollover. Supply `Columns` for empty sources or records with inconsistent properties. Records are processed incrementally, but Open XML package generation still increases process memory for very large outputs. See the measured results below before deploying on memory-constrained servers.
 
 ```csharp
 await using var output = File.Create("students.xlsx");
@@ -24,6 +24,62 @@ await DataExporter.WriteExcelStreamingAsync(
 ```
 
 An overload accepts a live `DbDataReader`. The writer does not dispose your reader or destination stream. The streaming route does not offer ClosedXML-only features such as automatic column sizing, charts, or Excel formulas. Test large exports before using it in production.
+
+## Validate performance and large files
+
+The repository includes a separate BenchmarkDotNet project and a forward-only
+XLSX stress runner. The stress runner generates rows on demand, writes a real
+workbook to a **read-write, seekable** FileStream (required by the Open XML
+ZIP packaging layer), then verifies **every worksheet's physical row count** using a
+streaming XML reader—without opening the file in ClosedXML.
+
+```bash
+# Small reproduction / CI smoke test
+dotnet run -c Release --project benchmarks/DataExport.Benchmarks -- --stress --rows 10000 --max-rows-per-sheet 500000
+
+# 100k records
+dotnet run -c Release --project benchmarks/DataExport.Benchmarks -- --stress --rows 100000 --results perf-100k.json
+
+# 1M records, forced worksheet rollover; optional peak limit
+dotnet run -c Release --project benchmarks/DataExport.Benchmarks -- --stress --rows 1000000 --max-rows-per-sheet 500000 --max-peak-mb 512 --results perf-1m.json
+
+# Statistical benchmark of in-memory vs forward-only Excel
+dotnet run -c Release --project benchmarks/DataExport.Benchmarks -- --filter '*ExcelExportBenchmarks*'
+```
+
+The separate **Streaming XLSX performance validation** GitHub Actions workflow
+runs a 10k-row smoke check on relevant PRs and exposes manual 100k and 1M
+stress options after the workflow is merged. It uploads JSON metrics
+(elapsed time, allocations, process peak working set and file size).
+A 1M-row run with a 500,000-row worksheet limit should produce three
+sheets, each with its own header. The max-peak-mb flag makes a configured
+memory budget enforceable; it is not a guarantee of the same peak on
+different machines. Comparing runs requires the same runner hardware,
+.NET runtime, data shape and workload. Peak *process* memory includes
+runtime overhead and should not be confused with managed allocations.
+
+### Measured XLSX stress results
+
+GitHub Actions, Ubuntu runner, .NET 10.0.15, five fields per synthetic
+record (ID, name, score, Boolean, date), using the forward-only exporter.
+Each XLSX's worksheet row counts were checked with streaming XML parsing.
+These figures include runtime and ZIP-package overhead, and should not be
+generalized to all servers.
+
+| Records | Time | Peak process RAM | Output size | Worksheet rows |
+| ---: | ---: | ---: | ---: | --- |
+| 100,000 | 3.385 s | 114.3 MB | 1.42 MB | 100,001 |
+| 1,000,000 | 11.204 s | 486.68 MB | 14.37 MB | 500,000 + 500,000 + 3 |
+
+**Finding:** Peak memory increased materially with output size, so this
+implementation must **not** be advertised as constant-memory or suitable
+for a low-memory server without measuring the actual workload. A future
+optimization should investigate true streaming ZIP package output and
+target an auditable memory budget at 1M rows.
+
+**These are validation tools, not verified performance claims.** Benchmark
+results must be run and reviewed before advertising a million-row performance
+number. Generated XLSX files are deleted automatically by the harness.
 
 ## Multi-sheet Excel report builder
 
