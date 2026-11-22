@@ -41,7 +41,8 @@ public sealed class ExcelReportBuilderTests
         Assert.Equal("Tashkent", students.Cell("C2").GetString());
         Assert.Equal(1500, students.Cell("B2").GetDouble());
         Assert.Equal("SUM(B2:B3)", students.Cell("B4").FormulaA1);
-        Assert.Equal("Students", book.Worksheet("Summary").Cell("A1").GetString());
+        Assert.Equal("Metric", book.Worksheet("Summary").Cell("A1").GetString());
+        Assert.Equal("Students", book.Worksheet("Summary").Cell("A2").GetString());
     }
 
     [Fact]
