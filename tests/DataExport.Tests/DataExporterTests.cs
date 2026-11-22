@@ -123,7 +123,7 @@ public sealed class DataExporterTests
                 }
             ]);
 
-            exporter.ToExcel(path);
+            exporter.ToExcel(path, includeHeaders: true);
 
             using var workbook = new XLWorkbook(path);
             var worksheet = workbook.Worksheet("Data");
@@ -177,7 +177,7 @@ public sealed class DataExporterTests
     }
 
     [Fact]
-    public void ToExcel_CanOmitHeaders()
+    public void ToExcel_DefaultOmitsHeaders()
     {
         var path = CreateTempFile(".xlsx");
 
@@ -187,7 +187,7 @@ public sealed class DataExporterTests
             [
                 new Dictionary<string, object> { ["Name"] = "Amina" }
             ]);
-            exporter.ToExcel(path, includeHeaders: false);
+            exporter.ToExcel(path);
 
             using var workbook = new XLWorkbook(path);
             Assert.Equal("Amina", workbook.Worksheet("Data").Cell(1, 1).GetString());
