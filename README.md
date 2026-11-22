@@ -29,7 +29,8 @@ An overload accepts a live `DbDataReader`. The writer does not dispose your read
 
 The repository includes a separate BenchmarkDotNet project and a forward-only
 XLSX stress runner. The stress runner generates rows on demand, writes a real
-workbook, then verifies **every worksheet's physical row count** using a
+workbook to a **read-write, seekable** FileStream (required by the Open XML
+ZIP packaging layer), then verifies **every worksheet's physical row count** using a
 streaming XML reader—without opening the file in ClosedXML.
 
 ```bash
