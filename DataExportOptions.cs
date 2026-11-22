@@ -3,9 +3,13 @@ namespace DataExportPackage;
 /// <summary>Output formats supported by <see cref="DataExporter"/>.</summary>
 public enum ExportFormat
 {
+    /// <summary>JavaScript Object Notation.</summary>
     Json,
+    /// <summary>Extensible Markup Language.</summary>
     Xml,
+    /// <summary>Comma-separated values.</summary>
     Csv,
+    /// <summary>Excel Open XML workbook.</summary>
     Excel
 }
 
@@ -15,16 +19,24 @@ public sealed class DataExportOptions
     /// <summary>Explicit column names and order, or null to use all discovered columns.</summary>
     public IReadOnlyList<string>? Columns { get; set; }
 
+    /// <summary>Field separator for CSV; comma by default.</summary>
     public char CsvDelimiter { get; set; } = ',';
+    /// <summary>Include the column names as the first CSV row.</summary>
     public bool CsvIncludeHeaders { get; set; } = true;
 
     /// <summary>Prefix text that Excel could interpret as a formula with an apostrophe.</summary>
     public bool CsvProtectFormulas { get; set; } = true;
 
+    /// <summary>Name of the exported Excel worksheet.</summary>
     public string WorksheetName { get; set; } = "Data";
+    /// <summary>Write column names in the first Excel row.</summary>
     public bool ExcelIncludeHeaders { get; set; }
+    /// <summary>Use bold font for Excel headers.</summary>
     public bool ExcelBoldHeaders { get; set; } = true;
+    /// <summary>Freeze the first row when headers are included.</summary>
     public bool ExcelFreezeHeader { get; set; }
+    /// <summary>Enable an Excel filter on the header range.</summary>
     public bool ExcelAutoFilter { get; set; }
+    /// <summary>Automatically size worksheet columns to their contents.</summary>
     public bool ExcelAutoFitColumns { get; set; } = true;
 }
