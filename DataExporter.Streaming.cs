@@ -98,69 +98,17 @@ public sealed partial class DataExporter
             .ConfigureAwait(false);
     }
 
-    private static async Task WriteExcelStreamingCoreAsync(
+    private static Task WriteExcelStreamingCoreAsync(
         IAsyncEnumerable<IReadOnlyDictionary<string, object?>> rows, Stream output,
-        StreamingExcelOptions options, CancellationToken cancellationToken)
-    {
-        var columns = options.Columns?.ToList();
-        ValidateStreamingColumns(columns);
-        using var document = SpreadsheetDocument.Create(output, SpreadsheetDocumentType.Workbook, true);
-        var workbookPart = document.AddWorkbookPart();
-        workbookPart.Workbook = new Workbook();
-        workbookPart.Workbook.AppendChild(new Sheets());
-        var stylesPart = workbookPart.AddNewPart<WorkbookStylesPart>();
-        stylesPart.Stylesheet = CreateStreamingStyles();
-        stylesPart.Stylesheet.Save();
-
-        StreamingWorksheet? sheet = null;
-        var sheetIndex = 0;
-        try
-        {
-            await foreach (var values in rows.WithCancellation(cancellationToken).ConfigureAwait(false))
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                columns ??= values.Keys.ToList();
-                ValidateStreamingColumns(columns);
-                if (sheet is null || sheet.WrittenRowCount >= options.MaxRowsPerWorksheet)
-                {
-                    if (sheet is not null)
-                    {
-                        if (!options.SplitLargeWorksheets)
-                            throw new InvalidOperationException("The worksheet row limit was exceeded. Enable SplitLargeWorksheets.");
-                        sheet.Dispose();
-                    }
-                    sheet = OpenStreamingSheet(workbookPart, ++sheetIndex, options, columns);
-                }
-
-                var cells = new object?[columns.Count];
-                for (var i = 0; i < columns.Count; i++)
-                {
-                    values.TryGetValue(columns[i], out var value);
-                    cells[i] = value;
-                }
-                sheet.WriteRow(cells, header: false);
-            }
-
-            // Empty sources still produce a valid workbook and, if specified, the header row.
-            if (sheet is null)
-                sheet = OpenStreamingSheet(workbookPart, ++sheetIndex, options, columns ?? []);
-        }
-        finally
-        {
-            sheet?.Dispose();
-        }
-        workbookPart.Workbook.Save();
-    }
+        StreamingExcelOptions options, CancellationToken cancellationToken) =>
+        WriteExcelZipCoreAsync(rows, output, options, cancellationToken);
 
     private static void ValidateStreamingExcelArguments(Stream destination, StreamingExcelOptions options)
     {
         ArgumentNullException.ThrowIfNull(destination);
-        // Open XML's ZIP packaging needs random-access read/write I/O even though
-        // the worksheet XML itself is written forward-only.
-        if (!destination.CanWrite || !destination.CanRead || !destination.CanSeek)
-            throw new ArgumentException(
-                "The destination must be a readable, writable, seekable stream (e.g. a read-write FileStream).",
-                nameof(destination));
+        // ZipArchiveMode.Create supports writable non-seekable streams.
+        if (!destination.CanWrite)
+            throw new ArgumentException("Destination must be a writable stream.", nameof(destination));
         if (options.MaxRowsPerWorksheet < (options.IncludeHeaders ? 2 : 1) ||
             options.MaxRowsPerWorksheet > 1_048_576)
             throw new ArgumentOutOfRangeException(nameof(options.MaxRowsPerWorksheet));
