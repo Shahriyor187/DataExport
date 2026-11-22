@@ -64,6 +64,24 @@ public sealed class StreamingExcelReliabilityTests
         Assert.Equal("Name", workbook.Worksheet(1).Cell("B1").GetString());
     }
 
+    [Fact]
+    public async Task RejectsWriteOnlyStreamsBeforeStartingTheSource()
+    {
+        var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".xlsx");
+        try
+        {
+            await using var output = new FileStream(path, FileMode.CreateNew,
+                FileAccess.Write, FileShare.None);
+            var error = await Assert.ThrowsAsync<ArgumentException>(() =>
+                DataExporter.WriteExcelStreamingAsync(Generate(100), output));
+            Assert.Contains("seekable", error.Message, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
     private static async IAsyncEnumerable<Row> Generate(int count)
     {
         for (var i = 0; i < count; i++)
