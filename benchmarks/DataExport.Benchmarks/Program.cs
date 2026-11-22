@@ -103,7 +103,7 @@ public static class StressRunner
         });
         try
         {
-            await using (var output = new FileStream(path, FileMode.CreateNew, FileAccess.Write,
+            await using (var output = new FileStream(path, FileMode.CreateNew, FileAccess.ReadWrite,
                 FileShare.None, 64 * 1024, FileOptions.SequentialScan))
             {
                 await DataExporter.WriteExcelStreamingAsync(ReportRows.Generate(rowCount),
