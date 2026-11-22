@@ -155,8 +155,12 @@ public sealed partial class DataExporter
     private static void ValidateStreamingExcelArguments(Stream destination, StreamingExcelOptions options)
     {
         ArgumentNullException.ThrowIfNull(destination);
-        if (!destination.CanWrite)
-            throw new ArgumentException("The destination stream must be writable.", nameof(destination));
+        // Open XML's ZIP packaging needs random-access read/write I/O even though
+        // the worksheet XML itself is written forward-only.
+        if (!destination.CanWrite || !destination.CanRead || !destination.CanSeek)
+            throw new ArgumentException(
+                "The destination must be a readable, writable, seekable stream (e.g. a read-write FileStream).",
+                nameof(destination));
         if (options.MaxRowsPerWorksheet < (options.IncludeHeaders ? 2 : 1) ||
             options.MaxRowsPerWorksheet > 1_048_576)
             throw new ArgumentOutOfRangeException(nameof(options.MaxRowsPerWorksheet));
