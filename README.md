@@ -8,7 +8,7 @@ A lightweight .NET library for exporting **C# objects, dictionaries, and DataTab
 
 ## Low-memory Excel exports (experimental v2 foundation)
 
-For large database queries, use the **forward-only** Open XML writer instead of `FromObjects(...)` or the existing ClosedXML workbook methods. The API consumes rows incrementally, preserves numeric/Boolean/date values and supports automatic sheet rollover. Supply `Columns` for empty sources or records with inconsistent properties. Memory use is bounded with respect to the number of rows, not necessarily the number or size of individual cells.
+For large database queries, use the **forward-only** Open XML writer instead of `FromObjects(...)` or the existing ClosedXML workbook methods. The API consumes rows incrementally, preserves numeric/Boolean/date values and supports automatic sheet rollover. Supply `Columns` for empty sources or records with inconsistent properties. Records are processed incrementally, but Open XML package generation still increases process memory for very large outputs. See the measured results below before deploying on memory-constrained servers.
 
 ```csharp
 await using var output = File.Create("students.xlsx");
@@ -57,6 +57,25 @@ memory budget enforceable; it is not a guarantee of the same peak on
 different machines. Comparing runs requires the same runner hardware,
 .NET runtime, data shape and workload. Peak *process* memory includes
 runtime overhead and should not be confused with managed allocations.
+
+### Measured XLSX stress results
+
+GitHub Actions, Ubuntu runner, .NET 10.0.15, five fields per synthetic
+record (ID, name, score, Boolean, date), using the forward-only exporter.
+Each XLSX's worksheet row counts were checked with streaming XML parsing.
+These figures include runtime and ZIP-package overhead, and should not be
+generalized to all servers.
+
+| Records | Time | Peak process RAM | Output size | Worksheet rows |
+| ---: | ---: | ---: | ---: | --- |
+| 100,000 | 3.385 s | 114.3 MB | 1.42 MB | 100,001 |
+| 1,000,000 | 11.204 s | 486.68 MB | 14.37 MB | 500,000 + 500,000 + 3 |
+
+**Finding:** Peak memory increased materially with output size, so this
+implementation must **not** be advertised as constant-memory or suitable
+for a low-memory server without measuring the actual workload. A future
+optimization should investigate true streaming ZIP package output and
+target an auditable memory budget at 1M rows.
 
 **These are validation tools, not verified performance claims.** Benchmark
 results must be run and reviewed before advertising a million-row performance
