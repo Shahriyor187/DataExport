@@ -72,3 +72,62 @@ exporter.ToExcel("people-with-headers.xlsx", includeHeaders: true);
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+## New in 1.2.0
+
+### Export C# objects and DataTables
+
+```csharp
+var users = new[] { new { Name = "Amina", Score = 1450 } };
+DataExporter.Export(users, "users.csv", ExportFormat.Csv);
+var exporter = DataExporter.FromObjects(users);
+var fromTable = DataExporter.FromDataTable(myDataTable);
+```
+
+### Export directly to streams
+
+The stream remains open after export, so web applications can write straight to the response.
+
+```csharp
+var exporter = DataExporter.FromObjects(users);
+await exporter.ExportAsync(httpContext.Response.Body, ExportFormat.Json,
+    cancellationToken: httpContext.RequestAborted);
+```
+
+For very large CSV exports, use `DataExporter.WriteCsvAsync(IAsyncEnumerable<T>, stream)`. It writes rows as they arrive without holding the entire dataset in memory. For sparse dictionaries, provide an explicit `Columns` list.
+
+### Configure CSV and Excel output
+
+```csharp
+var options = new DataExportOptions
+{
+    Columns = ["Name", "Score"],
+    CsvDelimiter = ';',
+    CsvProtectFormulas = true,
+    WorksheetName = "Results",
+    ExcelIncludeHeaders = true,
+    ExcelFreezeHeader = true,
+    ExcelAutoFilter = true,
+    ExcelAutoFitColumns = false
+};
+exporter.ToCsv("users.csv", options);
+exporter.ToExcel("users.xlsx", options);
+```
+
+Excel writes numeric, Boolean and date values using native cell types. The original `ToExcel(path)` still omits the header row for compatibility. CSV formula protection is on by default; disable it only when the receiving application intentionally needs unmodified potentially executable values.
+
+### ASP.NET Core download example
+
+```csharp
+app.MapGet("/export/users", async (HttpContext context) =>
+{
+    var users = new[] { new { Name = "Amina", Score = 1450 } };
+    context.Response.ContentType = "text/csv; charset=utf-8";
+    context.Response.Headers.ContentDisposition = "attachment; filename=users.csv";
+    await DataExporter.FromObjects(users)
+        .ExportAsync(context.Response.Body, ExportFormat.Csv,
+            cancellationToken: context.RequestAborted);
+});
+```
+
+This package doesn't provide an HTTP endpoint or require ASP.NET Core itself.
