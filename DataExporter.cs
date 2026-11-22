@@ -84,7 +84,7 @@ public sealed class DataExporter
     /// Writes the records as an Excel workbook (.xlsx), including a header row.
     /// </summary>
     /// <param name="filePath">Destination file path.</param>
-    public void ToExcel(string filePath) => ToExcel(filePath, includeHeaders: true);
+    public void ToExcel(string filePath) => ToExcel(filePath, includeHeaders: false);
 
     /// <summary>
     /// Writes the records as an Excel workbook (.xlsx).
