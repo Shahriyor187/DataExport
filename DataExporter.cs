@@ -1,63 +1,218 @@
-﻿using ClosedXML.Excel;
-using Newtonsoft.Json;
+using ClosedXML.Excel;
+using System.Globalization;
+using System.Text;
+using System.Text.Json;
 using System.Xml;
+using System.Xml.Linq;
 
 namespace DataExportPackage;
-public class DataExporter
+
+/// <summary>
+/// Exports a collection of dictionary records to JSON, XML, CSV, or Excel (XLSX).
+/// </summary>
+/// <remarks>
+/// Excel and CSV exports use the union of keys found across all records, preserving
+/// the order in which keys are first encountered. Excel and CSV exports include a
+/// header row by default.
+/// </remarks>
+public sealed class DataExporter
 {
-    private List<Dictionary<string, object>> data;
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        WriteIndented = true
+    };
+
+    private readonly IReadOnlyList<Dictionary<string, object>> _data;
+
+    /// <summary>
+    /// Creates an exporter for the supplied records.
+    /// </summary>
+    /// <param name="data">Records to export. Each dictionary represents one row.</param>
+    /// <exception cref="ArgumentNullException">The data collection is null.</exception>
+    /// <exception cref="ArgumentException">The collection contains a null record.</exception>
     public DataExporter(List<Dictionary<string, object>> data)
     {
-        this.data = data;
+        ArgumentNullException.ThrowIfNull(data);
+
+        if (data.Any(record => record is null))
+        {
+            throw new ArgumentException("The data collection cannot contain null records.", nameof(data));
+        }
+
+        _data = data;
     }
+
+    /// <summary>
+    /// Writes the records as indented JSON using UTF-8 without a byte-order mark.
+    /// </summary>
+    /// <param name="filePath">Destination file path.</param>
     public void ToJson(string filePath)
     {
-        string jsonData = JsonConvert.SerializeObject(data, Newtonsoft.Json.Formatting.Indented);
-        File.WriteAllText(filePath, jsonData);
+        ValidateFilePath(filePath);
+        var json = JsonSerializer.Serialize(_data, JsonOptions);
+        File.WriteAllText(filePath, json, Utf8WithoutBom);
     }
+
+    /// <summary>
+    /// Writes the records as XML. Dictionary keys are encoded as valid XML element names.
+    /// </summary>
+    /// <param name="filePath">Destination file path.</param>
     public void ToXml(string filePath)
     {
-        XmlDocument xmlDoc = new XmlDocument();
-        XmlDeclaration xmlDeclaration = xmlDoc.CreateXmlDeclaration("1.0", "UTF-8", null);
-        XmlElement root = xmlDoc.DocumentElement;
-        xmlDoc.InsertBefore(xmlDeclaration, root);
+        ValidateFilePath(filePath);
 
-        XmlElement dataElement = xmlDoc.CreateElement(string.Empty, "data", string.Empty);
-        xmlDoc.AppendChild(dataElement);
+        var document = new XDocument(
+            new XDeclaration("1.0", "utf-8", null),
+            new XElement("data",
+                _data.Select(record =>
+                    new XElement("entry",
+                        record.Select(pair =>
+                            new XElement(
+                                XmlConvert.EncodeLocalName(string.IsNullOrEmpty(pair.Key) ? "_" : pair.Key),
+                                FormatValue(pair.Value)))))));
 
-        foreach (var item in data)
+        using var writer = XmlWriter.Create(filePath, new XmlWriterSettings
         {
-            XmlElement entryElement = xmlDoc.CreateElement(string.Empty, "entry", string.Empty);
-            dataElement.AppendChild(entryElement);
+            Encoding = Utf8WithoutBom,
+            Indent = true
+        });
 
-            foreach (var kvp in item)
-            {
-                XmlElement element = xmlDoc.CreateElement(string.Empty, kvp.Key, string.Empty);
-                element.InnerText = kvp.Value.ToString();
-                entryElement.AppendChild(element);
-            }
-        }
-
-        xmlDoc.Save(filePath);
+        document.Save(writer);
     }
 
-    public void ToExcel(string filePath)
+    /// <summary>
+    /// Writes the records as an Excel workbook (.xlsx), including a header row.
+    /// </summary>
+    /// <param name="filePath">Destination file path.</param>
+    public void ToExcel(string filePath) => ToExcel(filePath, includeHeaders: false);
+
+    /// <summary>
+    /// Writes the records as an Excel workbook (.xlsx).
+    /// </summary>
+    /// <param name="filePath">Destination file path.</param>
+    /// <param name="includeHeaders">Whether to write the dictionary keys as the first row.</param>
+    public void ToExcel(string filePath, bool includeHeaders)
     {
-        var wb = new XLWorkbook();
-        var ws = wb.Worksheets.Add("Data");
+        ValidateFilePath(filePath);
 
-        int row = 1;
-        foreach (var item in data)
+        var columns = GetColumns();
+        using var workbook = new XLWorkbook();
+        var worksheet = workbook.Worksheets.Add("Data");
+
+        var firstDataRow = 1;
+        if (includeHeaders && columns.Count > 0)
         {
-            int col = 1;
-            foreach (var kvp in item)
+            firstDataRow = 2;
+
+            for (var columnIndex = 0; columnIndex < columns.Count; columnIndex++)
             {
-                ws.Cell(row, col).Value = kvp.Value.ToString();
-                col++;
+                worksheet.Cell(1, columnIndex + 1).Value = columns[columnIndex];
             }
-            row++;
+
+            worksheet.Row(1).Style.Font.Bold = true;
         }
 
-        wb.SaveAs(filePath);
+        for (var rowIndex = 0; rowIndex < _data.Count; rowIndex++)
+        {
+            var record = _data[rowIndex];
+            var worksheetRow = firstDataRow + rowIndex;
+
+            for (var columnIndex = 0; columnIndex < columns.Count; columnIndex++)
+            {
+                var columnName = columns[columnIndex];
+                record.TryGetValue(columnName, out var value);
+                worksheet.Cell(worksheetRow, columnIndex + 1).Value = FormatValue(value);
+            }
+        }
+
+        if (columns.Count > 0)
+        {
+            worksheet.Columns(1, columns.Count).AdjustToContents();
+        }
+
+        workbook.SaveAs(filePath);
     }
+
+    /// <summary>
+    /// Writes the records as UTF-8 CSV using RFC 4180-style escaping and a header row.
+    /// </summary>
+    /// <param name="filePath">Destination file path.</param>
+    public void ToCsv(string filePath)
+    {
+        ValidateFilePath(filePath);
+
+        var columns = GetColumns();
+        var builder = new StringBuilder();
+
+        if (columns.Count > 0)
+        {
+            AppendCsvRecord(builder, columns);
+
+            foreach (var record in _data)
+            {
+                var values = columns
+                    .Select(column =>
+                    {
+                        record.TryGetValue(column, out var value);
+                        return FormatValue(value);
+                    });
+
+                AppendCsvRecord(builder, values);
+            }
+        }
+
+        File.WriteAllText(filePath, builder.ToString(), Utf8WithoutBom);
+    }
+
+    private List<string> GetColumns()
+    {
+        var columns = new List<string>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var record in _data)
+        {
+            foreach (var key in record.Keys)
+            {
+                if (seen.Add(key))
+                {
+                    columns.Add(key);
+                }
+            }
+        }
+
+        return columns;
+    }
+
+    private static void AppendCsvRecord(StringBuilder builder, IEnumerable<string> values)
+    {
+        builder.AppendJoin(',', values.Select(EscapeCsvValue));
+        builder.AppendLine();
+    }
+
+    private static string EscapeCsvValue(string value)
+    {
+        if (value.IndexOfAny([',', '"', '\r', '\n']) < 0)
+        {
+            return value;
+        }
+
+        return $"\"{value.Replace("\"", "\"\"", StringComparison.Ordinal)}\"";
+    }
+
+    private static string FormatValue(object? value)
+    {
+        return value switch
+        {
+            null => string.Empty,
+            IFormattable formattable => formattable.ToString(null, CultureInfo.InvariantCulture) ?? string.Empty,
+            _ => value.ToString() ?? string.Empty
+        };
+    }
+
+    private static void ValidateFilePath(string filePath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
+    }
+
+    private static readonly Encoding Utf8WithoutBom = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
 }
