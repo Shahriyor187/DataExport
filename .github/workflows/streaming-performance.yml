@@ -40,7 +40,7 @@ jobs:
         run: dotnet build benchmarks/DataExport.Benchmarks/DataExport.Benchmarks.csproj -c Release
       - name: Generate XLSX, check row counts, and record resource usage
         env:
-          REQUESTED_ROWS: ${{ github.event.inputs.rows || '10000' }}
+          REQUESTED_ROWS: ${{ github.event.inputs.rows || '1000000' }}
           PEAK_LIMIT_MB: ${{ github.event.inputs.max_peak_mb || '0' }}
         run: |
           mkdir -p artifacts/performance
