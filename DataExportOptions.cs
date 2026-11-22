@@ -1,3 +1,5 @@
+using System.Text;
+
 namespace DataExportPackage;
 
 /// <summary>Output formats supported by <see cref="DataExporter"/>.</summary>
@@ -23,6 +25,9 @@ public sealed class DataExportOptions
     public char CsvDelimiter { get; set; } = ',';
     /// <summary>Include the column names as the first CSV row.</summary>
     public bool CsvIncludeHeaders { get; set; } = true;
+
+    /// <summary>Text encoding used for CSV. Null uses UTF-8 without a BOM.</summary>
+    public Encoding? CsvEncoding { get; set; }
 
     /// <summary>Prefix text that Excel could interpret as a formula with an apostrophe.</summary>
     public bool CsvProtectFormulas { get; set; } = true;
