@@ -52,14 +52,14 @@ exporter.ToExcel("people.xlsx");
 | `ToJson(path)` | JSON | Indented JSON, serialized with `System.Text.Json`. |
 | `ToXml(path)` | XML | Creates a `data` root with one `entry` element per record. Invalid XML key characters are encoded. |
 | `ToCsv(path)` | CSV | UTF-8 without BOM, comma-delimited, with quoted fields escaped. |
-| `ToExcel(path)` | XLSX | Creates a worksheet named `Data` and includes a header row. |
+| `ToExcel(path)` | XLSX | Creates a worksheet named `Data`; no header row by default, preserving the original API behavior. |
 
-CSV and Excel use the union of all dictionary keys, in the order those keys are first encountered. If a record does not contain a particular key, the corresponding cell is empty.
+CSV and Excel use the union of all dictionary keys, in the order those keys are first encountered. CSV includes a header row by default. If a record does not contain a particular key, the corresponding cell is empty.
 
-To omit the Excel header row:
+To include an Excel header row:
 
 ```csharp
-exporter.ToExcel("people-without-headers.xlsx", includeHeaders: false);
+exporter.ToExcel("people-with-headers.xlsx", includeHeaders: true);
 ```
 
 ## Notes
