@@ -15,7 +15,7 @@ namespace DataExportPackage;
 /// the order in which keys are first encountered. Excel and CSV exports include a
 /// header row by default.
 /// </remarks>
-public sealed class DataExporter
+public sealed partial class DataExporter
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -81,7 +81,7 @@ public sealed class DataExporter
     }
 
     /// <summary>
-    /// Writes the records as an Excel workbook (.xlsx), including a header row.
+    /// Writes the records as an Excel workbook (.xlsx), without a header row by default.
     /// </summary>
     /// <param name="filePath">Destination file path.</param>
     public void ToExcel(string filePath) => ToExcel(filePath, includeHeaders: false);
@@ -91,78 +91,14 @@ public sealed class DataExporter
     /// </summary>
     /// <param name="filePath">Destination file path.</param>
     /// <param name="includeHeaders">Whether to write the dictionary keys as the first row.</param>
-    public void ToExcel(string filePath, bool includeHeaders)
-    {
-        ValidateFilePath(filePath);
-
-        var columns = GetColumns();
-        using var workbook = new XLWorkbook();
-        var worksheet = workbook.Worksheets.Add("Data");
-
-        var firstDataRow = 1;
-        if (includeHeaders && columns.Count > 0)
-        {
-            firstDataRow = 2;
-
-            for (var columnIndex = 0; columnIndex < columns.Count; columnIndex++)
-            {
-                worksheet.Cell(1, columnIndex + 1).Value = columns[columnIndex];
-            }
-
-            worksheet.Row(1).Style.Font.Bold = true;
-        }
-
-        for (var rowIndex = 0; rowIndex < _data.Count; rowIndex++)
-        {
-            var record = _data[rowIndex];
-            var worksheetRow = firstDataRow + rowIndex;
-
-            for (var columnIndex = 0; columnIndex < columns.Count; columnIndex++)
-            {
-                var columnName = columns[columnIndex];
-                record.TryGetValue(columnName, out var value);
-                worksheet.Cell(worksheetRow, columnIndex + 1).Value = FormatValue(value);
-            }
-        }
-
-        if (columns.Count > 0)
-        {
-            worksheet.Columns(1, columns.Count).AdjustToContents();
-        }
-
-        workbook.SaveAs(filePath);
-    }
+    public void ToExcel(string filePath, bool includeHeaders) =>
+        ToExcel(filePath, new DataExportOptions { ExcelIncludeHeaders = includeHeaders });
 
     /// <summary>
     /// Writes the records as UTF-8 CSV using RFC 4180-style escaping and a header row.
     /// </summary>
     /// <param name="filePath">Destination file path.</param>
-    public void ToCsv(string filePath)
-    {
-        ValidateFilePath(filePath);
-
-        var columns = GetColumns();
-        var builder = new StringBuilder();
-
-        if (columns.Count > 0)
-        {
-            AppendCsvRecord(builder, columns);
-
-            foreach (var record in _data)
-            {
-                var values = columns
-                    .Select(column =>
-                    {
-                        record.TryGetValue(column, out var value);
-                        return FormatValue(value);
-                    });
-
-                AppendCsvRecord(builder, values);
-            }
-        }
-
-        File.WriteAllText(filePath, builder.ToString(), Utf8WithoutBom);
-    }
+    public void ToCsv(string filePath) => ToCsv(filePath, new DataExportOptions { CsvProtectFormulas = false });
 
     private List<string> GetColumns()
     {

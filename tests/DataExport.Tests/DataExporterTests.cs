@@ -214,6 +214,171 @@ public sealed class DataExporterTests
         }
     }
 
+
+    [Fact]
+    public void FromObjects_ExportsPropertiesAndTypedExcelCells()
+    {
+        var path = CreateTempFile(".xlsx");
+        try
+        {
+            var exporter = DataExporter.FromObjects(
+                new[] { new { Name = "Amina", Score = 1450, Passed = true } });
+            exporter.ToExcel(path, new DataExportOptions
+            {
+                ExcelIncludeHeaders = true,
+                ExcelFreezeHeader = true,
+                ExcelAutoFilter = true,
+                ExcelAutoFitColumns = false
+            });
+            using var workbook = new XLWorkbook(path);
+            var worksheet = workbook.Worksheet("Data");
+            Assert.Equal("Name", worksheet.Cell(1, 1).GetString());
+            Assert.Equal(1450, worksheet.Cell(2, 2).GetDouble());
+            Assert.True(worksheet.Cell(2, 3).GetBoolean());
+        }
+        finally { DeleteIfExists(path); }
+    }
+
+    [Fact]
+    public async Task ToCsvAsync_WritesToOpenStreamAndProtectsFormulaText()
+    {
+        var exporter = DataExporter.FromObjects(new[]
+        {
+            new { Name = "Ali", Comment = "=HYPERLINK(\"https://invalid.example\")" }
+        });
+        using var stream = new MemoryStream();
+        await exporter.ToCsvAsync(stream);
+        Assert.True(stream.CanWrite);
+        var content = System.Text.Encoding.UTF8.GetString(stream.ToArray());
+        Assert.Contains("'=HYPERLINK", content);
+    }
+
+    [Fact]
+    public async Task ExportAsync_WritesJsonToCallerOwnedStream()
+    {
+        var exporter = DataExporter.FromObjects(new[] { new { Id = 3, Name = "Ali" } });
+        using var output = new MemoryStream();
+        await exporter.ExportAsync(output, ExportFormat.Json);
+        Assert.True(output.CanWrite);
+        using var json = JsonDocument.Parse(output.ToArray());
+        Assert.Equal(3, json.RootElement[0].GetProperty("Id").GetInt32());
+    }
+
+    [Fact]
+    public void FromDataTable_ExportsColumnValues()
+    {
+        var table = new System.Data.DataTable();
+        table.Columns.Add("Score", typeof(int));
+        table.Rows.Add(1500);
+        var path = CreateTempFile(".json");
+        try
+        {
+            DataExporter.FromDataTable(table).ToJson(path);
+            using var json = JsonDocument.Parse(File.ReadAllText(path));
+            Assert.Equal(1500, json.RootElement[0].GetProperty("Score").GetInt32());
+        }
+        finally { DeleteIfExists(path); }
+    }
+
+    [Fact]
+    public async Task WriteCsvAsync_StreamsAsynchronousRecords()
+    {
+        static async IAsyncEnumerable<CsvRow> Records()
+        {
+            yield return new CsvRow(1, "Amina");
+            await Task.Yield();
+            yield return new CsvRow(2, "Ali");
+        }
+
+        using var output = new MemoryStream();
+        await DataExporter.WriteCsvAsync(Records(), output);
+        var csv = System.Text.Encoding.UTF8.GetString(output.ToArray());
+        Assert.Contains("Id,Name", csv);
+        Assert.Contains("1,Amina", csv);
+        Assert.Contains("2,Ali", csv);
+    }
+
+    private sealed record CsvRow(int Id, string Name);
+
+
+    [Fact]
+    public void CsvOptions_AllowCustomColumnsDelimiterAndFormulaProtection()
+    {
+        var path = CreateTempFile(".csv");
+        try
+        {
+            var data = DataExporter.FromObjects(new[]
+            {
+                new { Name = "Amina", Formula = "=1+2", Score = 1500 }
+            });
+            data.ToCsv(path, new DataExportOptions
+            {
+                Columns = ["Formula", "Name"],
+                CsvDelimiter = ';'
+            });
+
+            var csv = File.ReadAllText(path);
+            Assert.Contains("Formula;Name", csv);
+            Assert.Contains("'=1+2;Amina", csv);
+            Assert.DoesNotContain("Score", csv);
+        }
+        finally { DeleteIfExists(path); }
+    }
+
+    [Fact]
+    public void LegacyCsv_DoesNotAlterOriginalCellText()
+    {
+        var path = CreateTempFile(".csv");
+        try
+        {
+            DataExporter.FromObjects(new[] { new { Formula = "=1+2" } }).ToCsv(path);
+            Assert.Contains("=1+2", File.ReadAllText(path));
+            Assert.DoesNotContain("'=1+2", File.ReadAllText(path));
+        }
+        finally { DeleteIfExists(path); }
+    }
+
+    [Fact]
+    public void ExcelOptions_PreserveDateAndBooleanData()
+    {
+        var path = CreateTempFile(".xlsx");
+        try
+        {
+            var date = new DateTime(2026, 11, 22);
+            var data = DataExporter.FromObjects(new[] { new { Date = date, Active = true } });
+            data.ToExcel(path, new DataExportOptions
+            {
+                WorksheetName = "Summary",
+                ExcelIncludeHeaders = true,
+                ExcelAutoFitColumns = false
+            });
+            using var workbook = new XLWorkbook(path);
+            Assert.Equal(date, workbook.Worksheet("Summary").Cell(2, 1).GetDateTime());
+            Assert.True(workbook.Worksheet("Summary").Cell(2, 2).GetBoolean());
+        }
+        finally { DeleteIfExists(path); }
+    }
+
+
+    [Fact]
+    public void CsvOptions_SupportCustomEncoding()
+    {
+        var path = CreateTempFile(".csv");
+        try
+        {
+            DataExporter.FromObjects(new[] { new { Name = "Amina" } })
+                .ToCsv(path, new DataExportOptions
+                {
+                    CsvEncoding = System.Text.Encoding.Unicode
+                });
+            var bytes = File.ReadAllBytes(path);
+            Assert.Equal(0xFF, bytes[0]);
+            Assert.Equal(0xFE, bytes[1]);
+            Assert.Contains("Amina", File.ReadAllText(path, System.Text.Encoding.Unicode));
+        }
+        finally { DeleteIfExists(path); }
+    }
+
     private static string CreateTempFile(string extension) =>
         Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}{extension}");
 

@@ -72,3 +72,63 @@ exporter.ToExcel("people-with-headers.xlsx", includeHeaders: true);
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+## New in 1.2.0
+
+### Export C# objects and DataTables
+
+```csharp
+var users = new[] { new { Name = "Amina", Score = 1450 } };
+DataExporter.Export(users, "users.csv", ExportFormat.Csv);
+var exporter = DataExporter.FromObjects(users);
+var fromTable = DataExporter.FromDataTable(myDataTable);
+```
+
+### Export directly to streams
+
+The stream remains open after export, so web applications can write straight to the response. The CSV encoding can be specified with `DataExportOptions.CsvEncoding` (UTF-8 without BOM by default).
+
+```csharp
+var exporter = DataExporter.FromObjects(users);
+await exporter.ExportAsync(httpContext.Response.Body, ExportFormat.Json,
+    cancellationToken: httpContext.RequestAborted);
+```
+
+For very large CSV exports, use `DataExporter.WriteCsvAsync(IAsyncEnumerable<T>, stream)`. It writes rows as they arrive without holding the entire dataset in memory. For sparse dictionaries, provide an explicit `Columns` list.
+
+### Configure CSV and Excel output
+
+```csharp
+var options = new DataExportOptions
+{
+    Columns = ["Name", "Score"],
+    CsvDelimiter = ';',
+    CsvEncoding = System.Text.Encoding.UTF8,
+    CsvProtectFormulas = true,
+    WorksheetName = "Results",
+    ExcelIncludeHeaders = true,
+    ExcelFreezeHeader = true,
+    ExcelAutoFilter = true,
+    ExcelAutoFitColumns = false
+};
+exporter.ToCsv("users.csv", options);
+exporter.ToExcel("users.xlsx", options);
+```
+
+Excel writes numeric, Boolean and date values using native cell types. The original `ToExcel(path)` still omits the header row for compatibility. The options-based CSV methods protect against formula-like values by default. The original `ToCsv(path)` preserves its previous unmodified output for compatibility. For untrusted data, prefer `ToCsv(path, new DataExportOptions())` or `ToCsvAsync`.
+
+### ASP.NET Core download example
+
+```csharp
+app.MapGet("/export/users", async (HttpContext context) =>
+{
+    var users = new[] { new { Name = "Amina", Score = 1450 } };
+    context.Response.ContentType = "text/csv; charset=utf-8";
+    context.Response.Headers.ContentDisposition = "attachment; filename=users.csv";
+    await DataExporter.FromObjects(users)
+        .ExportAsync(context.Response.Body, ExportFormat.Csv,
+            cancellationToken: context.RequestAborted);
+});
+```
+
+This package doesn't provide an HTTP endpoint or require ASP.NET Core itself.

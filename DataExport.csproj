@@ -5,7 +5,7 @@
     <Nullable>enable</Nullable>
 
     <PackageId>DataExport</PackageId>
-    <Version>1.1.0</Version>
+    <Version>1.2.0</Version>
     <Authors>Shahriyor Murodilov</Authors>
     <Description>A small .NET library for exporting dictionary-based data to JSON, XML, CSV, and Excel (XLSX).</Description>
     <PackageTags>data-export;csv;json;xml;excel;xlsx;export</PackageTags>
