@@ -359,6 +359,26 @@ public sealed class DataExporterTests
         finally { DeleteIfExists(path); }
     }
 
+
+    [Fact]
+    public void CsvOptions_SupportCustomEncoding()
+    {
+        var path = CreateTempFile(".csv");
+        try
+        {
+            DataExporter.FromObjects(new[] { new { Name = "Amina" } })
+                .ToCsv(path, new DataExportOptions
+                {
+                    CsvEncoding = System.Text.Encoding.Unicode
+                });
+            var bytes = File.ReadAllBytes(path);
+            Assert.Equal(0xFF, bytes[0]);
+            Assert.Equal(0xFE, bytes[1]);
+            Assert.Contains("Amina", File.ReadAllText(path, System.Text.Encoding.Unicode));
+        }
+        finally { DeleteIfExists(path); }
+    }
+
     private static string CreateTempFile(string extension) =>
         Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}{extension}");
 
