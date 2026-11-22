@@ -111,7 +111,7 @@ public sealed partial class DataExporter
     {
         ValidateFilePath(filePath);
         using var output = File.Create(filePath);
-        using var writer = new StreamWriter(output, Utf8WithoutBom, 8192, leaveOpen: true);
+        using var writer = new StreamWriter(output, options?.CsvEncoding ?? Utf8WithoutBom, 8192, leaveOpen: true);
         WriteCsvRows(writer, options ?? new DataExportOptions());
     }
 
@@ -121,7 +121,7 @@ public sealed partial class DataExporter
         ArgumentNullException.ThrowIfNull(output);
         options ??= new DataExportOptions();
         ValidateCsvOptions(options);
-        await using var writer = new StreamWriter(output, Utf8WithoutBom, 8192, leaveOpen: true);
+        await using var writer = new StreamWriter(output, options.CsvEncoding ?? Utf8WithoutBom, 8192, leaveOpen: true);
         var columns = SelectColumns(options);
         if (options.CsvIncludeHeaders && columns.Count > 0)
             await writer.WriteLineAsync(JoinCsv(columns.Select(column => CsvValue(column, options.CsvProtectFormulas)), options.CsvDelimiter).AsMemory(), cancellationToken).ConfigureAwait(false);
@@ -150,7 +150,7 @@ public sealed partial class DataExporter
         ArgumentNullException.ThrowIfNull(output);
         options ??= new DataExportOptions();
         ValidateCsvOptions(options);
-        await using var writer = new StreamWriter(output, Utf8WithoutBom, 8192, leaveOpen: true);
+        await using var writer = new StreamWriter(output, options.CsvEncoding ?? Utf8WithoutBom, 8192, leaveOpen: true);
         List<string>? columns = options.Columns?.ToList();
         var headerWritten = false;
 
