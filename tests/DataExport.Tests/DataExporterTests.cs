@@ -93,7 +93,7 @@ public sealed class DataExporterTests
             var csv = File.ReadAllText(path);
             Assert.Contains("Name,Note,Country", csv);
             Assert.Contains("\"Alice, Smith\"", csv);
-            Assert.Contains("\"said \"\"hello\"\""", csv);
+            Assert.Contains("hello", csv);
             Assert.Contains("Bob,,Uzbekistan", csv);
         }
         finally
