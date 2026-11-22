@@ -86,7 +86,7 @@ var fromTable = DataExporter.FromDataTable(myDataTable);
 
 ### Export directly to streams
 
-The stream remains open after export, so web applications can write straight to the response.
+The stream remains open after export, so web applications can write straight to the response. The CSV encoding can be specified with `DataExportOptions.CsvEncoding` (UTF-8 without BOM by default).
 
 ```csharp
 var exporter = DataExporter.FromObjects(users);
@@ -103,6 +103,7 @@ var options = new DataExportOptions
 {
     Columns = ["Name", "Score"],
     CsvDelimiter = ';',
+    CsvEncoding = System.Text.Encoding.UTF8,
     CsvProtectFormulas = true,
     WorksheetName = "Results",
     ExcelIncludeHeaders = true,
