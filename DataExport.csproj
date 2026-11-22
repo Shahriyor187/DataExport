@@ -25,7 +25,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Update="README.md" Pack="true" PackagePath="/" />
-    <None Update="LICENSE" Pack="true" PackagePath="/" />
+    <!-- Explicitly include package documentation; None Update can miss these items. -->
+    <None Remove="README.md;LICENSE" />
+    <None Include="README.md" Pack="true" PackagePath="" />
+    <None Include="LICENSE" Pack="true" PackagePath="" />
   </ItemGroup>
 </Project>
