@@ -8,7 +8,7 @@ A lightweight .NET library for exporting **C# objects, dictionaries, and DataTab
 
 ## Low-memory Excel exports (experimental v2 foundation)
 
-For large database queries, use the **forward-only** Open XML writer instead of `FromObjects(...)` or the existing ClosedXML workbook methods. The API consumes rows incrementally, preserves numeric/Boolean/date values and supports automatic sheet rollover. Supply `Columns` for empty sources or records with inconsistent properties. Records are processed incrementally, but Open XML package generation still increases process memory for very large outputs. See the measured results below before deploying on memory-constrained servers.
+For large database queries, use the **direct-ZIP, forward-only** Open XML writer instead of `FromObjects(...)` or the existing ClosedXML workbook methods. The API consumes rows incrementally, preserves numeric/Boolean/date values and supports automatic sheet rollover. Supply `Columns` for empty sources or records with inconsistent properties. Rows and worksheet XML are written incrementally into ZIP entries without an in-memory Open XML package graph. The output stream only needs to be writable, so write-only file streams and non-seekable HTTP response streams are supported. Benchmark the workload before making production memory guarantees.
 
 ```csharp
 await using var output = File.Create("students.xlsx");
@@ -23,14 +23,13 @@ await DataExporter.WriteExcelStreamingAsync(
     });
 ```
 
-An overload accepts a live `DbDataReader`. The writer does not dispose your reader or destination stream. The streaming route does not offer ClosedXML-only features such as automatic column sizing, charts, or Excel formulas. Test large exports before using it in production.
+An overload accepts a live `DbDataReader`. The writer does not dispose your reader or destination stream. On cancellation or failure the partly written XLSX must be discarded. The streaming route does not offer ClosedXML-only features such as automatic column sizing, charts, or Excel formulas. Test large exports before using it in production.
 
 ## Validate performance and large files
 
 The repository includes a separate BenchmarkDotNet project and a forward-only
 XLSX stress runner. The stress runner generates rows on demand, writes a real
-workbook to a **read-write, seekable** FileStream (required by the Open XML
-ZIP packaging layer), then verifies **every worksheet's physical row count** using a
+workbook to a FileStream using a direct ZIP writer, then verifies **every worksheet's physical row count** using a
 streaming XML reader—without opening the file in ClosedXML.
 
 ```bash
@@ -71,11 +70,7 @@ generalized to all servers.
 | 100,000 | 3.385 s | 114.3 MB | 1.42 MB | 100,001 |
 | 1,000,000 | 11.204 s | 486.68 MB | 14.37 MB | 500,000 + 500,000 + 3 |
 
-**Finding:** Peak memory increased materially with output size, so this
-implementation must **not** be advertised as constant-memory or suitable
-for a low-memory server without measuring the actual workload. A future
-optimization should investigate true streaming ZIP package output and
-target an auditable memory budget at 1M rows.
+**Historical baseline:** These measurements were taken using the previous Open XML SDK package implementation, before the direct-ZIP writer. They are **not** performance figures for the current implementation. Compare an equivalent new benchmark run against these results before claiming memory improvements.
 
 **These are validation tools, not verified performance claims.** Benchmark
 results must be run and reviewed before advertising a million-row performance
