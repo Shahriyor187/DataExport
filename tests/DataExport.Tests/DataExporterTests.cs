@@ -167,7 +167,7 @@ public sealed class DataExporterTests
             exporter.ToCsv(path);
 
             var contents = File.ReadAllText(path);
-            Assert.Contains("quoted", contents);
+            Assert.Contains("\"\"quoted\"\"", contents);
             Assert.Contains("with a second line", contents);
         }
         finally
