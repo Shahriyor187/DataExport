@@ -32,8 +32,8 @@ public sealed class StreamingExcelOptions
 public sealed partial class DataExporter
 {
     /// <summary>
-    /// Writes XLSX in constant working memory relative to row count using forward-only Open XML.
-    /// Does not buffer the source or use ClosedXML's in-memory workbook.
+    /// Writes worksheet XML incrementally from the source instead of buffering all input rows.
+    /// Open XML package generation may still increase process memory as output grows.
     /// The caller owns and must dispose the destination stream.
     /// </summary>
     public static async Task WriteExcelStreamingAsync<T>(
