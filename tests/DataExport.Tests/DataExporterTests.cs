@@ -300,6 +300,65 @@ public sealed class DataExporterTests
 
     private sealed record CsvRow(int Id, string Name);
 
+
+    [Fact]
+    public void CsvOptions_AllowCustomColumnsDelimiterAndFormulaProtection()
+    {
+        var path = CreateTempFile(".csv");
+        try
+        {
+            var data = DataExporter.FromObjects(new[]
+            {
+                new { Name = "Amina", Formula = "=1+2", Score = 1500 }
+            });
+            data.ToCsv(path, new DataExportOptions
+            {
+                Columns = ["Formula", "Name"],
+                CsvDelimiter = ';'
+            });
+
+            var csv = File.ReadAllText(path);
+            Assert.Contains("Formula;Name", csv);
+            Assert.Contains("'=1+2;Amina", csv);
+            Assert.DoesNotContain("Score", csv);
+        }
+        finally { DeleteIfExists(path); }
+    }
+
+    [Fact]
+    public void LegacyCsv_DoesNotAlterOriginalCellText()
+    {
+        var path = CreateTempFile(".csv");
+        try
+        {
+            DataExporter.FromObjects(new[] { new { Formula = "=1+2" } }).ToCsv(path);
+            Assert.Contains("=1+2", File.ReadAllText(path));
+            Assert.DoesNotContain("'=1+2", File.ReadAllText(path));
+        }
+        finally { DeleteIfExists(path); }
+    }
+
+    [Fact]
+    public void ExcelOptions_PreserveDateAndBooleanData()
+    {
+        var path = CreateTempFile(".xlsx");
+        try
+        {
+            var date = new DateTime(2026, 11, 22);
+            var data = DataExporter.FromObjects(new[] { new { Date = date, Active = true } });
+            data.ToExcel(path, new DataExportOptions
+            {
+                WorksheetName = "Summary",
+                ExcelIncludeHeaders = true,
+                ExcelAutoFitColumns = false
+            });
+            using var workbook = new XLWorkbook(path);
+            Assert.Equal(date, workbook.Worksheet("Summary").Cell(2, 1).GetDateTime());
+            Assert.True(workbook.Worksheet("Summary").Cell(2, 2).GetBoolean());
+        }
+        finally { DeleteIfExists(path); }
+    }
+
     private static string CreateTempFile(string extension) =>
         Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}{extension}");
 
