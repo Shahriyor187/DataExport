@@ -114,7 +114,7 @@ exporter.ToCsv("users.csv", options);
 exporter.ToExcel("users.xlsx", options);
 ```
 
-Excel writes numeric, Boolean and date values using native cell types. The original `ToExcel(path)` still omits the header row for compatibility. CSV formula protection is on by default; disable it only when the receiving application intentionally needs unmodified potentially executable values.
+Excel writes numeric, Boolean and date values using native cell types. The original `ToExcel(path)` still omits the header row for compatibility. The options-based CSV methods protect against formula-like values by default. The original `ToCsv(path)` preserves its previous unmodified output for compatibility. For untrusted data, prefer `ToCsv(path, new DataExportOptions())` or `ToCsvAsync`.
 
 ### ASP.NET Core download example
 
