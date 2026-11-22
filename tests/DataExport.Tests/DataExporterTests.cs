@@ -148,6 +148,72 @@ public sealed class DataExporterTests
         Assert.Throws<ArgumentNullException>(() => new DataExporter(null!));
     }
 
+
+    [Fact]
+    public void ToCsv_HandlesCommasQuotesAndNewlines()
+    {
+        var path = CreateTempFile(".csv");
+
+        try
+        {
+            var exporter = new DataExporter(
+            [
+                new Dictionary<string, object>
+                {
+                    ["Message"] = "A, \"quoted\" value\nwith a second line"
+                }
+            ]);
+
+            exporter.ToCsv(path);
+
+            var contents = File.ReadAllText(path);
+            Assert.Contains("quoted", contents);
+            Assert.Contains("with a second line", contents);
+        }
+        finally
+        {
+            DeleteIfExists(path);
+        }
+    }
+
+    [Fact]
+    public void ToExcel_CanOmitHeaders()
+    {
+        var path = CreateTempFile(".xlsx");
+
+        try
+        {
+            var exporter = new DataExporter(
+            [
+                new Dictionary<string, object> { ["Name"] = "Amina" }
+            ]);
+            exporter.ToExcel(path, includeHeaders: false);
+
+            using var workbook = new XLWorkbook(path);
+            Assert.Equal("Amina", workbook.Worksheet("Data").Cell(1, 1).GetString());
+        }
+        finally
+        {
+            DeleteIfExists(path);
+        }
+    }
+
+    [Fact]
+    public void ToJson_HandlesEmptyData()
+    {
+        var path = CreateTempFile(".json");
+
+        try
+        {
+            new DataExporter([]).ToJson(path);
+            Assert.Equal("[]", File.ReadAllText(path));
+        }
+        finally
+        {
+            DeleteIfExists(path);
+        }
+    }
+
     private static string CreateTempFile(string extension) =>
         Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}{extension}");
 
