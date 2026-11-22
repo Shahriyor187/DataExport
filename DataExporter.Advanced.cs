@@ -124,7 +124,7 @@ public sealed partial class DataExporter
         await using var writer = new StreamWriter(output, Utf8WithoutBom, 8192, leaveOpen: true);
         var columns = SelectColumns(options);
         if (options.CsvIncludeHeaders && columns.Count > 0)
-            await writer.WriteLineAsync(JoinCsv(columns, options.CsvDelimiter).AsMemory(), cancellationToken).ConfigureAwait(false);
+            await writer.WriteLineAsync(JoinCsv(columns.Select(column => CsvValue(column, options.CsvProtectFormulas)), options.CsvDelimiter).AsMemory(), cancellationToken).ConfigureAwait(false);
         foreach (var row in _data)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -163,7 +163,7 @@ public sealed partial class DataExporter
             if (!headerWritten)
             {
                 if (options.CsvIncludeHeaders && columns.Count > 0)
-                    await writer.WriteLineAsync(JoinCsv(columns, options.CsvDelimiter).AsMemory(), cancellationToken).ConfigureAwait(false);
+                    await writer.WriteLineAsync(JoinCsv(columns.Select(column => CsvValue(column, options.CsvProtectFormulas)), options.CsvDelimiter).AsMemory(), cancellationToken).ConfigureAwait(false);
                 headerWritten = true;
             }
 
@@ -274,7 +274,7 @@ public sealed partial class DataExporter
             return;
 
         if (options.CsvIncludeHeaders)
-            writer.WriteLine(JoinCsv(columns, options.CsvDelimiter));
+            writer.WriteLine(JoinCsv(columns.Select(column => CsvValue(column, options.CsvProtectFormulas)), options.CsvDelimiter));
         foreach (var row in _data)
         {
             var values = columns.Select(key =>
