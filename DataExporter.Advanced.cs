@@ -177,6 +177,7 @@ public sealed partial class DataExporter
         await writer.FlushAsync(cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>Writes a configurable Excel workbook to a file path.</summary>
     public void ToExcel(string filePath, DataExportOptions? options)
     {
         ValidateFilePath(filePath);
@@ -287,7 +288,7 @@ public sealed partial class DataExporter
 
     private static void ValidateCsvOptions(DataExportOptions options)
     {
-        if (options.CsvDelimiter is '\r' or '\n' or '"')
+        if (options.CsvDelimiter is '\0' or '\r' or '\n' or '"')
             throw new ArgumentException("CSV delimiter must not be a quote or newline.", nameof(options));
     }
 
