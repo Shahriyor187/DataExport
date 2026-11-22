@@ -98,7 +98,7 @@ public sealed partial class DataExporter
     /// Writes the records as UTF-8 CSV using RFC 4180-style escaping and a header row.
     /// </summary>
     /// <param name="filePath">Destination file path.</param>
-    public void ToCsv(string filePath) => ToCsv(filePath, options: null);
+    public void ToCsv(string filePath) => ToCsv(filePath, new DataExportOptions { CsvProtectFormulas = false });
 
     private List<string> GetColumns()
     {
