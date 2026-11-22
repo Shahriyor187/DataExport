@@ -6,6 +6,25 @@
 
 A lightweight .NET library for exporting **C# objects, dictionaries, and DataTables** to **JSON, XML, CSV, and Excel (XLSX)**, with configurable output and streaming support.
 
+## Low-memory Excel exports (experimental v2 foundation)
+
+For large database queries, use the **forward-only** Open XML writer instead of `FromObjects(...)` or the existing ClosedXML workbook methods. The API consumes rows incrementally, preserves numeric/Boolean/date values and supports automatic sheet rollover. Supply `Columns` for empty sources or records with inconsistent properties. Memory use is bounded with respect to the number of rows, not necessarily the number or size of individual cells.
+
+```csharp
+await using var output = File.Create("students.xlsx");
+await DataExporter.WriteExcelStreamingAsync(
+    studentRows, // IAsyncEnumerable<Student>
+    output,
+    new StreamingExcelOptions
+    {
+        Columns = ["Name", "Score"],
+        IncludeHeaders = true,
+        SplitLargeWorksheets = true
+    });
+```
+
+An overload accepts a live `DbDataReader`. The writer does not dispose your reader or destination stream. The streaming route does not offer ClosedXML-only features such as automatic column sizing, charts, or Excel formulas. Test large exports before using it in production.
+
 ## Requirements
 
 - .NET 8 or .NET 10
