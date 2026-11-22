@@ -1,0 +1,58 @@
+name: Streaming XLSX performance validation
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - "DataExporter.Streaming.cs"
+      - "benchmarks/**"
+      - ".github/workflows/streaming-performance.yml"
+      - "DataExport.csproj"
+  workflow_dispatch:
+    inputs:
+      rows:
+        description: "Data rows to generate (100000 or 1000000 recommended)"
+        required: true
+        type: choice
+        options:
+          - "100000"
+          - "1000000"
+      max_peak_mb:
+        description: "Optional peak working-set limit in MiB; 0 disables the limit"
+        required: true
+        default: "0"
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Build stress and benchmark runner
+        run: dotnet build benchmarks/DataExport.Benchmarks/DataExport.Benchmarks.csproj -c Release
+      - name: Generate XLSX, check row counts, and record resource usage
+        env:
+          REQUESTED_ROWS: ${{ github.event.inputs.rows || '10000' }}
+          PEAK_LIMIT_MB: ${{ github.event.inputs.max_peak_mb || '0' }}
+        run: |
+          mkdir -p artifacts/performance
+          dotnet run --no-build -c Release --project benchmarks/DataExport.Benchmarks/DataExport.Benchmarks.csproj -- \
+            --stress --rows "$REQUESTED_ROWS" \
+            --max-rows-per-sheet 500000 \
+            --max-peak-mb "$PEAK_LIMIT_MB" \
+            --results artifacts/performance/streaming-xlsx.json
+      - name: Upload results (not the generated XLSX)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: streaming-xlsx-performance
+          path: artifacts/performance/*.json
+          if-no-files-found: warn
