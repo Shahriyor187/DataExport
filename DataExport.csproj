@@ -7,7 +7,7 @@
     <PackageId>DataExport</PackageId>
     <Version>1.2.0</Version>
     <Authors>Shahriyor Murodilov</Authors>
-    <Description>A small .NET library for exporting dictionary-based data to JSON, XML, CSV, and Excel (XLSX).</Description>
+    <Description>A lightweight .NET library for exporting C# objects, dictionaries, and DataTables to JSON, XML, CSV, and Excel (XLSX), with configurable output and streaming support.</Description>
     <PackageTags>data-export;csv;json;xml;excel;xlsx;export</PackageTags>
     <PackageProjectUrl>https://github.com/Shahriyor187/DataExport</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Shahriyor187/DataExport</RepositoryUrl>

@@ -4,7 +4,7 @@
 [![Build](https://github.com/Shahriyor187/DataExport/actions/workflows/ci.yml/badge.svg)](https://github.com/Shahriyor187/DataExport/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-A lightweight .NET library for exporting dictionary-based records to **JSON, XML, CSV, and Excel (XLSX)** files.
+A lightweight .NET library for exporting **C# objects, dictionaries, and DataTables** to **JSON, XML, CSV, and Excel (XLSX)**, with configurable output and streaming support.
 
 ## Requirements
 
