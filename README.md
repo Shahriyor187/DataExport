@@ -25,6 +25,28 @@ await DataExporter.WriteExcelStreamingAsync(
 
 An overload accepts a live `DbDataReader`. The writer does not dispose your reader or destination stream. The streaming route does not offer ClosedXML-only features such as automatic column sizing, charts, or Excel formulas. Test large exports before using it in production.
 
+## Multi-sheet Excel report builder
+
+Use `ExcelReportBuilder` to create styled workbooks from several datasets. It supports nested property mapping, custom display headers and number formats, frozen headers, filters, alternating row styles and formula-based total rows.
+
+```csharp
+using var report = new ExcelReportBuilder();
+report.AddSheet("Students", students, new ExcelReportSheetOptions
+{
+    Columns =
+    [
+        new ExcelReportColumn("Name", "Student"),
+        new ExcelReportColumn("Score", "SAT score", "#,##0"),
+        new ExcelReportColumn("Address.City", "City")
+    ]
+});
+report.AddTotals("Students", 2);
+report.AddSheet("Overview", new[] { new { Metric = "Total students", Value = 100 } });
+report.SaveAs("report.xlsx");
+```
+
+This report builder uses an **in-memory workbook**, so use `WriteExcelStreamingAsync` instead for very large exports.
+
 ## Requirements
 
 - .NET 8 or .NET 10
