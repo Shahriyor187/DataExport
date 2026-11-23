@@ -6,22 +6,30 @@ Do not publish without explicit user approval.
 
 ## Shipping gates
 
-- [ ] Verify .NET 8 and .NET 10 test suites on the exact release commit.
-- [ ] Verify the streaming XLSX regression suite and 10k-row smoke test.
-- [ ] Build `.nupkg` and `.snupkg`, inspect license, README, package version,
-      and both target-framework binaries.
-- [ ] Install **only the packed local candidate** into clean .NET 8 and
-      .NET 10 console apps. Execute JSON, XML, CSV, buffered XLSX,
-      direct-ZIP streaming XLSX and multi-sheet report outputs.
-- [ ] Run and review direct and transitive NuGet advisory checks.
-- [ ] Confirm API compatibility expectations and major version: the
-      `DataExporter` class is now sealed; System.Text.Json replaces
-      Newtonsoft.Json; existing methods `ToJson/ToXml/ToExcel/ToCsv` remain.
+- [x] Verify .NET 8 and .NET 10 test suites on the RC commit:
+      28 tests passed on each target in Actions run 45191053994.
+      Repeat these checks on the future stable release commit.
+- [x] Streaming XLSX regression suite and 10k-row CI smoke validation passed:
+      workflow run 45191053943. Revalidate on the stable release commit.
+- [x] Built DataExport.2.0.0-rc.1.nupkg and .snupkg. CI inspected
+      README, license, package ID and net8.0/net10.0 binaries
+      (run 45191053994). Verify the exact stable package separately.
+- [x] Installed the exact local RC package into isolated .NET 8 and
+      .NET 10 console apps; executed JSON, XML, CSV, buffered XLSX,
+      direct-ZIP streaming XLSX and multi-sheet report checks successfully
+      (run 45191053994). Repeat on the stable package.
+- [x] Automated audit completed: 16 resolved package entries,
+      no reported direct/transitive advisories (run 45191053994).
+      A point-in-time scan is not a comprehensive security review.
+- [x] Reviewed compatibility intent: the current `DataExporter` is sealed;
+      System.Text.Json replaces Newtonsoft.Json; the original public
+      file-based methods remain. A major 2.0.0 version communicates the
+      behavioral/subclassing compatibility impact.
 - [ ] Verify large-data resource usage with representative datasets; recorded
       100k and 1M performance checks use synthetic data on GitHub runners.
-- [ ] Review streaming limitations: invalid output must be discarded after
-      cancellation/errors; output stream is owned by caller; ZIP output is
-      forward-only and no chart/formula rendering is supported.
+- [x] Documented stream ownership, cancellation cleanup and supported
+      XLSX features. The direct-ZIP writer does not implement Excel charts,
+      calculated formulas or a full in-memory worksheet feature set.
 - [ ] Ensure consuming services enforce access controls, authorization,
       output quotas, request timeouts, concurrency limits, disk space and
       cleanup; this library itself cannot impose upstream hosting controls.
@@ -30,6 +38,20 @@ Do not publish without explicit user approval.
 - [ ] Obtain explicit approval before triggering guarded manual NuGet publish.
 - [ ] Verify NuGet.org listing and create GitHub tag/release only after
       a successful publish.
+
+## CI evidence for candidate (2026-11-23)
+
+- [DataExport CI, RC SHA b501d66b](https://github.com/Shahriyor187/DataExport/actions/runs/45191053994):
+  **28/28 tests passed on net8.0**, **28/28 on net10.0**,
+  exact local package `DataExport.2.0.0-rc.1.nupkg` verified and
+  executable consumers passed on both target frameworks.
+  16 resolved dependencies were audited with no reported vulnerabilities.
+- [Streaming XLSX performance check](https://github.com/Shahriyor187/DataExport/actions/runs/45191053943):
+  10,000-row smoke workload completed successfully.
+
+These runs apply to the **source release candidate only**, not the future
+stable NuGet publication. A later version change creates a new commit
+requiring fresh CI and package checks.
 
 ## Packaging and safety
 
