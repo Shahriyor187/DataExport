@@ -191,7 +191,7 @@ exporter.ToExcel("people-with-headers.xlsx", includeHeaders: true);
 
 MIT. See [LICENSE](LICENSE).
 
-## New in 1.2.0
+## Additional v2 export APIs
 
 ### Export C# objects and DataTables
 
