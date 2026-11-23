@@ -6,12 +6,12 @@
 
 A lightweight .NET library for exporting **C# objects, dictionaries, and DataTables** to **JSON, XML, CSV, and Excel (XLSX)**, with configurable output and streaming support.
 
-> **v2 development status:** The GitHub release-review branch stages `2.0.0-rc.1` as a **source candidate only**; it has not been published to NuGet. Verify the installed package version before relying on newly added APIs. The older 1.x API is not guaranteed binary/behaviorally identical: `DataExporter` is now sealed and JSON serialization uses `System.Text.Json` rather than Newtonsoft.Json.
+> **Versioning:** Install **DataExport 2.0.0 or newer** to use the v2 features described below. GitHub source and the latest actually available NuGet package can differ, so check the installed package version. Upgrading from 1.x may require changes: `DataExporter` is now sealed and JSON serialization uses `System.Text.Json` rather than Newtonsoft.Json.
 
 > **Runtime lifecycle:** The package supports `net8.0` for compatibility, but Microsoft ended support for the .NET 8 runtime on November 10, 2026. Prefer supported .NET 10 for new production applications.
 
 
-## Low-memory Excel exports (v2 candidate)
+## Low-memory Excel exports (v2)
 
 For large database queries, use the **direct-ZIP, forward-only** Open XML writer instead of `FromObjects(...)` or the existing ClosedXML workbook methods. The API consumes rows incrementally, preserves numeric/Boolean/date values and supports automatic sheet rollover. Supply `Columns` for empty sources or records with inconsistent properties. Rows and worksheet XML are written incrementally into ZIP entries without an in-memory Open XML package graph. The output stream only needs to be writable, so write-only file streams and non-seekable HTTP response streams are supported. Benchmark the workload before making production memory guarantees.
 
