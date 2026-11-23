@@ -77,9 +77,11 @@ finally
         Directory.Delete(root, recursive: true);
 }
 
-static async IAsyncEnumerable<(string Name, int Score, bool Active)> Generate()
+static async IAsyncEnumerable<ConsumerRow> Generate()
 {
-    yield return ("Amina", 1450, true);
-    yield return ("Ali", 1400, false);
+    yield return new ConsumerRow("Amina", 1450, true);
+    yield return new ConsumerRow("Ali", 1400, false);
     await Task.CompletedTask;
 }
+
+public sealed record ConsumerRow(string Name, int Score, bool Active);
