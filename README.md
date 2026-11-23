@@ -6,6 +6,43 @@
 
 A lightweight .NET library for exporting **C# objects, dictionaries, and DataTables** to **JSON, XML, CSV, and Excel (XLSX)**, with configurable output and streaming support.
 
+## Try Export Studio — live sample application
+
+See DataExport and ExcelExportKit **working together** in the [Export Studio demo](https://github.com/Shahriyor187/ExcelExportKit/tree/master/examples/ExportStudio). It's a self-contained ASP.NET Core 10 application with synthetic sales data, an interactive table and one-click CSV/JSON/XML/XLSX/PDF/DOCX downloads.
+
+```powershell
+git clone https://github.com/Shahriyor187/ExcelExportKit.git
+cd ExcelExportKit
+dotnet run --project examples/ExportStudio/ExportStudio.csproj --urls http://localhost:5075
+```
+
+Open [http://localhost:5075](http://localhost:5075). No credentials, database or uploads required.
+
+**Copyable DataExport example:**
+
+```csharp
+using DataExportPackage;
+
+var orders = new[]
+{
+    new { Customer = "Amina", Region = "Tashkent", Revenue = 450m },
+    new { Customer = "Jasur", Region = "Samarkand", Revenue = 320m }
+};
+
+var exporter = DataExporter.FromObjects(orders);
+exporter.ToCsv("orders.csv", new DataExportOptions { CsvProtectFormulas = true });
+exporter.ToExcel("orders.xlsx", new DataExportOptions
+{
+    WorksheetName = "Orders",
+    ExcelIncludeHeaders = true,
+    ExcelAutoFilter = true
+});
+```
+
+For Excel-to-PDF/DOCX conversions, see [ExcelExportKit](https://github.com/Shahriyor187/ExcelExportKit).
+
+
+
 > **Versioning:** Install **DataExport 2.0.0 or newer** to use the v2 features described below. GitHub source and the latest actually available NuGet package can differ, so check the installed package version. Upgrading from 1.x may require changes: `DataExporter` is now sealed and JSON serialization uses `System.Text.Json` rather than Newtonsoft.Json.
 
 > **Runtime lifecycle:** The package supports `net8.0` for compatibility, but Microsoft ended support for the .NET 8 runtime on November 10, 2026. Prefer supported .NET 10 for new production applications.
