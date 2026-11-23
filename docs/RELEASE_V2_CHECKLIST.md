@@ -1,7 +1,7 @@
 # DataExport v2 release readiness
 
-This document tracks the proposed **2.0.0** major release. A GitHub
-`2.0.0-rc.1` source candidate is not a published NuGet package.
+This document tracks the proposed **2.0.0** major release. The release-review branch stages
+`2.0.0` as a stable source version; **it is not yet published to NuGet**.
 Do not publish without explicit user approval.
 
 ## Shipping gates
@@ -33,8 +33,9 @@ Do not publish without explicit user approval.
 - [ ] Ensure consuming services enforce access controls, authorization,
       output quotas, request timeouts, concurrency limits, disk space and
       cleanup; this library itself cannot impose upstream hosting controls.
-- [ ] Convert the source candidate version to stable `2.0.0`, re-run
-      every gate on the exact stable commit, and update changelog/README.
+- [x] Stage version `2.0.0`, upgrade notes and release README in a
+      separate PR. CI and local package verification must pass on the
+      final stable PR SHA and then again on merged `master`.
 - [ ] Obtain explicit approval before triggering guarded manual NuGet publish.
 - [ ] Verify NuGet.org listing and create GitHub tag/release only after
       a successful publish.
