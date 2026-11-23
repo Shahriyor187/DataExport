@@ -22,6 +22,14 @@ jobs:
       - name: Restore
         run: dotnet restore tests/DataExport.Tests/DataExport.Tests.csproj
 
+      - name: Audit direct and transitive NuGet dependencies
+        run: |
+          dotnet list DataExport.csproj package --vulnerable --include-transitive \
+            --format json --output-version 1 --no-restore > nuget-audit.json
+          dotnet list DataExport.csproj package --include-transitive \
+            --format json --output-version 1 --no-restore > nuget-inventory.json
+          python3 .github/scripts/check-nuget-audit.py nuget-audit.json nuget-inventory.json
+
       - name: Test on .NET 8 and .NET 10
         run: dotnet test tests/DataExport.Tests/DataExport.Tests.csproj --configuration Release --no-restore
 
@@ -65,16 +73,8 @@ jobs:
               print(f"Verified {packages[0]}: README, license, both target frameworks")
           PY
 
-      - name: Smoke-test NuGet consumer on .NET 8
-        env:
-          PACKAGE_ID: DataExport
-        run: |
-          mkdir -p consumer
-          cd consumer
-          dotnet new console --framework net8.0 --no-restore
-          dotnet add package "$PACKAGE_ID" --version 1.2.0 --no-restore
-          dotnet restore --source ../artifacts --source https://api.nuget.org/v3/index.json
-          dotnet build --configuration Release --no-restore
+      - name: Install and execute packed candidate on .NET 8 and .NET 10
+        run: bash .github/scripts/test-local-package.sh
 
       - name: Upload NuGet build artifacts
         uses: actions/upload-artifact@v4
