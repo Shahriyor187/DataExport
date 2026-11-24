@@ -100,13 +100,14 @@ public sealed partial class DataExporter
     /// <param name="filePath">Destination file path.</param>
     public void ToCsv(string filePath) => ToCsv(filePath, new DataExportOptions { CsvProtectFormulas = false });
 
-    private List<string> GetColumns()
+    private List<string> GetColumns(CancellationToken cancellationToken = default)
     {
         var columns = new List<string>();
         var seen = new HashSet<string>(StringComparer.Ordinal);
 
         foreach (var record in _data)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             foreach (var key in record.Keys)
             {
                 if (seen.Add(key))

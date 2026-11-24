@@ -86,12 +86,21 @@ public sealed partial class DataExporter
                     CloseOutput = false
                 }))
                 {
-                    var document = new XDocument(
-                        new XDeclaration("1.0", "utf-8", null),
-                        new XElement("data", _data.Select(row =>
-                            new XElement("entry", row.Select(pair =>
-                                new XElement(XmlConvert.EncodeLocalName(string.IsNullOrEmpty(pair.Key) ? "_" : pair.Key),
-                                    FormatValue(pair.Value)))))));
+                    var root = new XElement("data");
+                    foreach (var row in _data)
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        var entry = new XElement("entry");
+                        foreach (var pair in row)
+                        {
+                            cancellationToken.ThrowIfCancellationRequested();
+                            entry.Add(new XElement(XmlConvert.EncodeLocalName(string.IsNullOrEmpty(pair.Key) ? "_" : pair.Key),
+                                FormatValue(pair.Value)));
+                        }
+                        root.Add(entry);
+                    }
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var document = new XDocument(new XDeclaration("1.0", "utf-8", null), root);
                     await document.SaveAsync(writer, cancellationToken).ConfigureAwait(false);
                 }
                 break;
@@ -99,11 +108,12 @@ public sealed partial class DataExporter
                 await ToCsvAsync(output, options, cancellationToken).ConfigureAwait(false);
                 break;
             case ExportFormat.Excel:
-                ToExcel(output, options);
+                WriteExcelCore(output, options, cancellationToken);
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(format));
         }
+        cancellationToken.ThrowIfCancellationRequested();
     }
 
     /// <summary>Exports CSV without buffering the entire output in memory.</summary>
@@ -118,11 +128,13 @@ public sealed partial class DataExporter
     /// <summary>Writes CSV to a caller-owned stream, leaving it open.</summary>
     public async Task ToCsvAsync(Stream output, DataExportOptions? options = null, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         ArgumentNullException.ThrowIfNull(output);
         options ??= new DataExportOptions();
         ValidateCsvOptions(options);
         await using var writer = new StreamWriter(output, options.CsvEncoding ?? Utf8WithoutBom, 8192, leaveOpen: true);
-        var columns = SelectColumns(options);
+        var columns = SelectColumns(options, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
         if (options.CsvIncludeHeaders && columns.Count > 0)
             await writer.WriteLineAsync(JoinCsv(columns.Select(column => CsvValue(column, options.CsvProtectFormulas)), options.CsvDelimiter).AsMemory(), cancellationToken).ConfigureAwait(false);
         foreach (var row in _data)
@@ -135,7 +147,9 @@ public sealed partial class DataExporter
             });
             await writer.WriteLineAsync(JoinCsv(values, options.CsvDelimiter).AsMemory(), cancellationToken).ConfigureAwait(false);
         }
+        cancellationToken.ThrowIfCancellationRequested();
         await writer.FlushAsync(cancellationToken).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
     }
 
     /// <summary>
@@ -146,6 +160,7 @@ public sealed partial class DataExporter
         IAsyncEnumerable<T> records, Stream output, DataExportOptions? options = null,
         CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         ArgumentNullException.ThrowIfNull(records);
         ArgumentNullException.ThrowIfNull(output);
         options ??= new DataExportOptions();
@@ -156,6 +171,7 @@ public sealed partial class DataExporter
 
         await foreach (var record in records.WithCancellation(cancellationToken).ConfigureAwait(false))
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (record is null)
                 throw new ArgumentException("Records must not contain null objects.", nameof(records));
             var row = ObjectToRow(record);
@@ -174,7 +190,9 @@ public sealed partial class DataExporter
             });
             await writer.WriteLineAsync(JoinCsv(values, options.CsvDelimiter).AsMemory(), cancellationToken).ConfigureAwait(false);
         }
+        cancellationToken.ThrowIfCancellationRequested();
         await writer.FlushAsync(cancellationToken).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
     }
 
     /// <summary>Writes a configurable Excel workbook to a file path.</summary>
@@ -186,12 +204,16 @@ public sealed partial class DataExporter
     }
 
     /// <summary>Writes an Excel workbook to a caller-owned stream, preserving numeric, date and Boolean values.</summary>
-    public void ToExcel(Stream output, DataExportOptions? options = null)
+    public void ToExcel(Stream output, DataExportOptions? options = null) =>
+        WriteExcelCore(output, options, CancellationToken.None);
+
+    private void WriteExcelCore(Stream output, DataExportOptions? options, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         ArgumentNullException.ThrowIfNull(output);
         options ??= new DataExportOptions();
         ArgumentException.ThrowIfNullOrWhiteSpace(options.WorksheetName);
-        var columns = SelectColumns(options);
+        var columns = SelectColumns(options, cancellationToken);
         var firstDataRow = options.ExcelIncludeHeaders && columns.Count > 0 ? 2 : 1;
         if ((long)_data.Count + firstDataRow - 1 > 1_048_576)
             throw new InvalidOperationException("The data exceeds Excel's worksheet row limit.");
@@ -203,13 +225,17 @@ public sealed partial class DataExporter
         if (options.ExcelIncludeHeaders)
         {
             for (var index = 0; index < columns.Count; index++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
                 worksheet.Cell(1, index + 1).Value = columns[index];
+            }
             if (options.ExcelBoldHeaders && columns.Count > 0)
                 worksheet.Row(1).Style.Font.Bold = true;
         }
 
         for (var rowIndex = 0; rowIndex < _data.Count; rowIndex++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var row = _data[rowIndex];
             for (var colIndex = 0; colIndex < columns.Count; colIndex++)
             {
@@ -225,9 +251,12 @@ public sealed partial class DataExporter
             if (options.ExcelAutoFilter)
                 worksheet.Range(1, 1, Math.Max(1, _data.Count + 1), columns.Count).SetAutoFilter();
         }
+        cancellationToken.ThrowIfCancellationRequested();
         if (columns.Count > 0 && options.ExcelAutoFitColumns)
             worksheet.Columns(1, columns.Count).AdjustToContents();
+        cancellationToken.ThrowIfCancellationRequested();
         workbook.SaveAs(output);
+        cancellationToken.ThrowIfCancellationRequested();
     }
 
     private static void SetCellValue(IXLCell cell, object? value)
@@ -258,9 +287,10 @@ public sealed partial class DataExporter
         }
     }
 
-    private List<string> SelectColumns(DataExportOptions options)
+    private List<string> SelectColumns(DataExportOptions options, CancellationToken cancellationToken = default)
     {
-        var columns = options.Columns?.ToList() ?? GetColumns();
+        cancellationToken.ThrowIfCancellationRequested();
+        var columns = options.Columns?.ToList() ?? GetColumns(cancellationToken);
         if (columns.Any(string.IsNullOrWhiteSpace) || columns.Distinct(StringComparer.Ordinal).Count() != columns.Count)
             throw new ArgumentException("Columns must contain unique, nonempty names.", nameof(options));
         return columns;

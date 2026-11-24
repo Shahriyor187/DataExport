@@ -28,6 +28,7 @@ public sealed partial class DataExporter
         IAsyncEnumerable<IReadOnlyDictionary<string, object?>> records,
         Stream destination, StreamingExcelOptions options, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var columns = options.Columns?.ToList();
         ValidateStreamingColumns(columns);
         var sheetNames = new List<string>();
@@ -66,6 +67,7 @@ public sealed partial class DataExporter
                 sheet.WriteRow(values, header: false);
             }
 
+            cancellationToken.ThrowIfCancellationRequested();
             if (sheet is null)
             {
                 // An empty input still produces a workbook with one worksheet.
@@ -85,6 +87,7 @@ public sealed partial class DataExporter
         WriteStylesPart(zip);
         WriteRootRelationships(zip);
         WriteContentTypes(zip, sheetNames.Count);
+        cancellationToken.ThrowIfCancellationRequested();
     }
 
     private static string GetSheetName(string baseName, int index)

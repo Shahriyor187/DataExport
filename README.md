@@ -287,3 +287,7 @@ app.MapGet("/export/users", async (HttpContext context) =>
 ```
 
 This package doesn't provide an HTTP endpoint or require ASP.NET Core itself.
+
+## Cancellation and memory characteristics (v2.1 development)
+
+Async exports accept cancellation tokens. Cancellation is cooperative: row construction and streaming enumeration check the token, and asynchronous I/O receives it where supported. ClosedXML workbook saving, auto-fit, XML serialization internals, and ZIP finalization may be synchronous and cannot always be interrupted immediately. A caller-owned stream remains open; discard its contents after cancellation or failure, since partial bytes may already have been written. CSV and direct-ZIP XLSX streaming APIs avoid buffering all source rows; `FromObjects`, JSON/XML exports, buffered XLSX and the report builder retain data in memory. Stream output alone is not a low-memory guarantee.
