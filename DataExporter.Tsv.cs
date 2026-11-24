@@ -24,7 +24,7 @@ public sealed partial class DataExporter
             Columns = options.Columns,
             RowOffset = options.RowOffset,
             MaxRows = options.MaxRows,
-            CsvDelimiter = '\t',
+            CsvDelimiter = ',',
             CsvIncludeHeaders = options.CsvIncludeHeaders,
             CsvEncoding = options.CsvEncoding,
             CsvProtectFormulas = options.CsvProtectFormulas
