@@ -79,6 +79,9 @@ public sealed partial class DataExporter
             case ExportFormat.Csv:
                 exporter.ToCsv(filePath, options);
                 break;
+            case ExportFormat.Tsv:
+                exporter.ToTsv(filePath, options);
+                break;
             case ExportFormat.Excel:
                 exporter.ToExcel(filePath, options);
                 break;
@@ -129,6 +132,9 @@ public sealed partial class DataExporter
                 break;
             case ExportFormat.Csv:
                 await ToCsvAsync(output, options, cancellationToken).ConfigureAwait(false);
+                break;
+            case ExportFormat.Tsv:
+                await ToTsvAsync(output, options, cancellationToken).ConfigureAwait(false);
                 break;
             case ExportFormat.Excel:
                 WriteExcelCore(output, options, cancellationToken);

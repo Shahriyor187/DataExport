@@ -12,7 +12,9 @@ public enum ExportFormat
     /// <summary>Comma-separated values.</summary>
     Csv,
     /// <summary>Excel Open XML workbook.</summary>
-    Excel
+    Excel,
+    /// <summary>Tab-separated values.</summary>
+    Tsv
 }
 
 /// <summary>Optional export settings. The existing file-based methods remain available.</summary>
