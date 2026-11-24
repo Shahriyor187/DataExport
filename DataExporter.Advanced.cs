@@ -417,9 +417,12 @@ public sealed partial class DataExporter
     private static string CsvValue(object? value, bool protectFormulas)
     {
         var formatted = FormatValue(value);
-        if (protectFormulas && value is string && formatted.TrimStart().Length > 0 &&
-            formatted.TrimStart()[0] is '=' or '+' or '-' or '@')
-            return "'" + formatted;
+        if (protectFormulas && value is string)
+        {
+            var trimmed = formatted.AsSpan().TrimStart();
+            if (!trimmed.IsEmpty && trimmed[0] is '=' or '+' or '-' or '@')
+                return "'" + formatted;
+        }
         return formatted;
     }
 

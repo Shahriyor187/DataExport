@@ -5,6 +5,11 @@ on:
     branches: [master]
     paths:
       - "DataExporter.Streaming.cs"
+      - "DataExporter.ZipStreaming.cs"
+      - "DataExporter.Advanced.cs"
+      - "DataExporter.DatabaseDelimited.cs"
+      - "DataExporter.Tsv.cs"
+      - "ExportProgress.cs"
       - "benchmarks/**"
       - ".github/workflows/streaming-performance.yml"
       - "DataExport.csproj"
@@ -49,7 +54,25 @@ jobs:
             --max-rows-per-sheet 500000 \
             --max-peak-mb "$PEAK_LIMIT_MB" \
             --results artifacts/performance/streaming-xlsx.json
-      - name: Upload results (not the generated XLSX)
+      - name: Generate and verify CSV and TSV stress exports
+        env:
+          REQUESTED_ROWS: ${{ github.event.inputs.rows || '100000' }}
+        run: |
+          set -euo pipefail
+          for format in csv tsv; do
+            dotnet run --no-build -c Release --project benchmarks/DataExport.Benchmarks/DataExport.Benchmarks.csproj -- \
+              --delimited-stress "$format" "$REQUESTED_ROWS" | tee "artifacts/performance/${format}.log"
+            python3 - "$format" <<'PY'
+          import json, pathlib, sys
+          fmt = sys.argv[1]
+          directory = pathlib.Path("artifacts/performance")
+          lines = (directory / (fmt + ".log")).read_text().splitlines()
+          reports = [json.loads(line.removeprefix("DELIMITED_STRESS ")) for line in lines if line.startswith("DELIMITED_STRESS ")]
+          assert len(reports) == 1 and reports[0]["verified"] and reports[0]["format"] == fmt
+          (directory / (fmt + ".json")).write_text(json.dumps(reports[0], indent=2) + "\n")
+          PY
+          done
+      - name: Upload results (not generated data files)
         if: always()
         uses: actions/upload-artifact@v4
         with:
