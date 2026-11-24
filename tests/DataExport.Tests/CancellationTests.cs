@@ -50,8 +50,10 @@ public sealed class CancellationTests
         Assert.Equal(0, stream.Length);
     }
 
-    [Fact]
-    public async Task StreamingCsvChecksCancellationEvenIfSourceIgnoresToken()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task StreamingChecksCancellationEvenIfSourceIgnoresToken(bool excel)
     {
         using var source = new CancellationTokenSource();
         using var stream = new MemoryStream();
@@ -67,7 +69,9 @@ public sealed class CancellationTests
             }
         }
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
-            DataExporter.WriteCsvAsync(Rows(), stream, cancellationToken: source.Token));
+            excel
+                ? DataExporter.WriteExcelStreamingAsync(Rows(), stream, cancellationToken: source.Token)
+                : DataExporter.WriteCsvAsync(Rows(), stream, cancellationToken: source.Token));
         Assert.Equal(3, visited);
         Assert.True(stream.CanWrite);
     }
@@ -94,6 +98,46 @@ public sealed class CancellationTests
                 new DataExportOptions { ExcelAutoFitColumns = false }, source.Token));
         Assert.Equal(2, visits);
         Assert.True(stream.CanWrite);
+    }
+
+    [Fact]
+    public async Task CsvCancellationDuringOutputDoesNotReportSuccess()
+    {
+        using var source = new CancellationTokenSource();
+        using var stream = new CancellingOutput(source);
+        var visited = 0;
+        async IAsyncEnumerable<WideRow> Rows()
+        {
+            for (var i = 0; i < 10; i++)
+            {
+                visited++;
+                yield return new WideRow(new string('x', 32768));
+                await Task.CompletedTask;
+            }
+        }
+
+        var task = DataExporter.WriteCsvAsync(Rows(), stream, cancellationToken: source.Token);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => task);
+        Assert.True(task.IsCanceled);
+        Assert.True(stream.Writes > 0);
+        Assert.InRange(visited, 1, 9);
+        Assert.True(stream.CanWrite);
+    }
+
+    private sealed record WideRow(string Value);
+
+    // Simulates an output that accepts bytes but ignores its cancellation token.
+    private sealed class CancellingOutput(CancellationTokenSource source) : MemoryStream
+    {
+        public int Writes { get; private set; }
+
+        public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            base.Write(buffer.Span);
+            Writes++;
+            source.Cancel();
+            return ValueTask.CompletedTask;
+        }
     }
 
     private sealed record Row(int Id);
