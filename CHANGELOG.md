@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased (v2.1 development)
+
+- Improve cooperative cancellation in existing async CSV, XML, buffered XLSX and streaming XLSX exports without changing public signatures. Document synchronous library boundaries and partial-stream ownership.
+
 ## 2.0.0 — Stable source release prepared (2026-11-23; publication pending)
 
 This release contains substantial new export features and intentional

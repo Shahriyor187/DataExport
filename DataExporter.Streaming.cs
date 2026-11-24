@@ -36,6 +36,7 @@ public sealed partial class DataExporter
         IAsyncEnumerable<T> records, Stream destination,
         StreamingExcelOptions? options = null, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         ArgumentNullException.ThrowIfNull(records);
         ValidateStreamingExcelArguments(destination, options ??= new StreamingExcelOptions());
         async IAsyncEnumerable<IReadOnlyDictionary<string, object?>> Rows(
@@ -43,6 +44,7 @@ public sealed partial class DataExporter
         {
             await foreach (var value in records.WithCancellation(ct).ConfigureAwait(false))
             {
+                ct.ThrowIfCancellationRequested();
                 if (value is null)
                     throw new ArgumentException("Records cannot contain null objects.", nameof(records));
                 yield return ObjectToRow(value);
@@ -50,6 +52,7 @@ public sealed partial class DataExporter
         }
         await WriteExcelStreamingCoreAsync(Rows(cancellationToken), destination, options, cancellationToken)
             .ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
     }
 
     /// <summary>
@@ -60,6 +63,7 @@ public sealed partial class DataExporter
         DbDataReader reader, Stream destination,
         StreamingExcelOptions? options = null, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         ArgumentNullException.ThrowIfNull(reader);
         ValidateStreamingExcelArguments(destination, options ??= new StreamingExcelOptions());
         var fieldNames = Enumerable.Range(0, reader.FieldCount).Select(reader.GetName).ToArray();
@@ -81,6 +85,7 @@ public sealed partial class DataExporter
         {
             while (await reader.ReadAsync(ct).ConfigureAwait(false))
             {
+                ct.ThrowIfCancellationRequested();
                 var row = new Dictionary<string, object?>(fieldNames.Length, StringComparer.Ordinal);
                 for (var i = 0; i < fieldNames.Length; i++)
                     row.Add(fieldNames[i], await reader.IsDBNullAsync(i, ct).ConfigureAwait(false)
@@ -92,6 +97,7 @@ public sealed partial class DataExporter
 
         await WriteExcelStreamingCoreAsync(Rows(cancellationToken), destination, options, cancellationToken)
             .ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
     }
 
     private static Task WriteExcelStreamingCoreAsync(
