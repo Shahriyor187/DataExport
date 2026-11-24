@@ -33,6 +33,9 @@ jobs:
       - name: Test on .NET 8 and .NET 10
         run: dotnet test tests/DataExport.Tests/DataExport.Tests.csproj --configuration Release --no-restore
 
+      - name: Compare progress reporting overhead
+        run: dotnet run --project benchmarks/DataExport.Benchmarks/DataExport.Benchmarks.csproj -c Release -- --progress
+
       - name: Pack both target frameworks
         run: dotnet pack DataExport.csproj --configuration Release --no-restore --output ./artifacts
 
