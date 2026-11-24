@@ -70,6 +70,5 @@ internal sealed class ExportProgressTracker
             Elapsed = clock.Elapsed
         });
         lastReported = rows;
-        token.ThrowIfCancellationRequested();
     }
 }
