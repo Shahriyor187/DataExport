@@ -69,7 +69,7 @@ public sealed partial class DataExporter
                     row.TryGetValue(columns[i], out values[i]);
                 sheet.WriteRow(values, header: false);
                 written++;
-                if (options.MaxRows is long limit && written >= limit) break;
+
             }
 
             cancellationToken.ThrowIfCancellationRequested();
