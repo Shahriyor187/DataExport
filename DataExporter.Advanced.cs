@@ -30,6 +30,22 @@ public sealed partial class DataExporter
         for (var i = 0; i < count; i++) yield return _data[start + i];
     }
 
+    private ExportProgressTracker? BufferedProgress(DataExportOptions options, CancellationToken token = default)
+    {
+        ExportProgressTracker.Validate(options.ProgressIntervalRows, options.TotalRows);
+        return ExportProgressTracker.Create(options.Progress, options.ProgressIntervalRows, RowWindow(options).Count, token);
+    }
+
+    private IEnumerable<Dictionary<string, object>> TrackedRows(DataExportOptions options, ExportProgressTracker? progress, CancellationToken token = default)
+    {
+        foreach (var row in SelectedRows(options))
+        {
+            token.ThrowIfCancellationRequested();
+            yield return row;
+            progress?.RowWritten();
+        }
+    }
+
     /// <summary>Creates an exporter from regular C# objects or dictionaries.</summary>
     public static DataExporter FromObjects<T>(IEnumerable<T> records)
     {
@@ -67,6 +83,7 @@ public sealed partial class DataExporter
     {
         options ??= new DataExportOptions();
         ValidateRowWindow(options.RowOffset, options.MaxRows);
+        ExportProgressTracker.Validate(options.ProgressIntervalRows, options.TotalRows);
         var exporter = FromObjects(records);
         switch (format)
         {
@@ -101,9 +118,15 @@ public sealed partial class DataExporter
         switch (format)
         {
             case ExportFormat.Json:
-                await JsonSerializer.SerializeAsync(output, SelectedRows(options), JsonOptions, cancellationToken).ConfigureAwait(false);
+            {
+                var progress = BufferedProgress(options, cancellationToken);
+                await JsonSerializer.SerializeAsync(output, progress is null ? SelectedRows(options) : TrackedRows(options, progress, cancellationToken), JsonOptions, cancellationToken).ConfigureAwait(false);
+                progress?.Finish();
                 break;
+            }
             case ExportFormat.Xml:
+            {
+                var progress = BufferedProgress(options, cancellationToken);
                 using (var writer = XmlWriter.Create(output, new XmlWriterSettings
                 {
                     Async = true,
@@ -124,12 +147,15 @@ public sealed partial class DataExporter
                                 FormatValue(pair.Value)));
                         }
                         root.Add(entry);
+                        progress?.RowWritten();
                     }
                     cancellationToken.ThrowIfCancellationRequested();
                     var document = new XDocument(new XDeclaration("1.0", "utf-8", null), root);
                     await document.SaveAsync(writer, cancellationToken).ConfigureAwait(false);
                 }
+                progress?.Finish();
                 break;
+            }
             case ExportFormat.Csv:
                 await ToCsvAsync(output, options, cancellationToken).ConfigureAwait(false);
                 break;
@@ -150,10 +176,13 @@ public sealed partial class DataExporter
     {
         ValidateFilePath(filePath);
         options ??= new DataExportOptions();
-        ValidateRowWindow(options.RowOffset, options.MaxRows);
+        ValidateCsvOptions(options);
+        var progress = BufferedProgress(options);
         using var output = File.Create(filePath);
         using var writer = new StreamWriter(output, options?.CsvEncoding ?? Utf8WithoutBom, 8192, leaveOpen: true);
-        WriteCsvRows(writer, options ?? new DataExportOptions());
+        WriteCsvRows(writer, options, progress);
+        writer.Flush();
+        progress?.Finish();
     }
 
     /// <summary>Writes CSV to a caller-owned stream, leaving it open.</summary>
@@ -163,6 +192,7 @@ public sealed partial class DataExporter
         ArgumentNullException.ThrowIfNull(output);
         options ??= new DataExportOptions();
         ValidateCsvOptions(options);
+        var progress = BufferedProgress(options, cancellationToken);
         await using var writer = new StreamWriter(output, options.CsvEncoding ?? Utf8WithoutBom, 8192, leaveOpen: true);
         var columns = SelectColumns(options, cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
@@ -177,10 +207,12 @@ public sealed partial class DataExporter
                 return CsvValue(value, options.CsvProtectFormulas);
             });
             await writer.WriteLineAsync(JoinCsv(values, options.CsvDelimiter).AsMemory(), cancellationToken).ConfigureAwait(false);
+            progress?.RowWritten();
         }
         cancellationToken.ThrowIfCancellationRequested();
         await writer.FlushAsync(cancellationToken).ConfigureAwait(false);
         cancellationToken.ThrowIfCancellationRequested();
+        progress?.Finish();
     }
 
     /// <summary>
@@ -196,6 +228,7 @@ public sealed partial class DataExporter
         ArgumentNullException.ThrowIfNull(output);
         options ??= new DataExportOptions();
         ValidateCsvOptions(options);
+        var progress = ExportProgressTracker.Create(options.Progress, options.ProgressIntervalRows, options.MaxRows == 0 ? 0 : options.TotalRows, cancellationToken);
         await using var writer = new StreamWriter(output, options.CsvEncoding ?? Utf8WithoutBom, 8192, leaveOpen: true);
         List<string>? columns = options.Columns?.ToList();
         var headerWritten = false;
@@ -224,6 +257,7 @@ public sealed partial class DataExporter
             });
             await writer.WriteLineAsync(JoinCsv(values, options.CsvDelimiter).AsMemory(), cancellationToken).ConfigureAwait(false);
             written++;
+            progress?.RowWritten();
             if (options.MaxRows is long limit && written >= limit) break;
         }
         if (!headerWritten && options.CsvIncludeHeaders && columns is { Count: > 0 } &&
@@ -232,6 +266,7 @@ public sealed partial class DataExporter
         cancellationToken.ThrowIfCancellationRequested();
         await writer.FlushAsync(cancellationToken).ConfigureAwait(false);
         cancellationToken.ThrowIfCancellationRequested();
+        progress?.Finish();
     }
 
     /// <summary>Writes a configurable Excel workbook to a file path.</summary>
@@ -240,6 +275,7 @@ public sealed partial class DataExporter
         ValidateFilePath(filePath);
         options ??= new DataExportOptions();
         ValidateRowWindow(options.RowOffset, options.MaxRows);
+        ExportProgressTracker.Validate(options.ProgressIntervalRows, options.TotalRows);
         using var output = File.Create(filePath);
         ToExcel(output, options);
     }
@@ -256,6 +292,7 @@ public sealed partial class DataExporter
         ArgumentException.ThrowIfNullOrWhiteSpace(options.WorksheetName);
         var columns = SelectColumns(options, cancellationToken);
         var (start, count) = RowWindow(options);
+        var progress = BufferedProgress(options, cancellationToken);
         var firstDataRow = options.ExcelIncludeHeaders && columns.Count > 0 ? 2 : 1;
         if ((long)count + firstDataRow - 1 > 1_048_576)
             throw new InvalidOperationException("The data exceeds Excel's worksheet row limit.");
@@ -284,6 +321,7 @@ public sealed partial class DataExporter
                 row.TryGetValue(columns[colIndex], out var value);
                 SetCellValue(worksheet.Cell(rowIndex + firstDataRow, colIndex + 1), value);
             }
+            progress?.RowWritten();
         }
 
         if (options.ExcelIncludeHeaders && columns.Count > 0)
@@ -299,6 +337,7 @@ public sealed partial class DataExporter
         cancellationToken.ThrowIfCancellationRequested();
         workbook.SaveAs(output);
         cancellationToken.ThrowIfCancellationRequested();
+        progress?.Finish();
     }
 
     private static void SetCellValue(IXLCell cell, object? value)
@@ -338,7 +377,7 @@ public sealed partial class DataExporter
         return columns;
     }
 
-    private void WriteCsvRows(TextWriter writer, DataExportOptions options)
+    private void WriteCsvRows(TextWriter writer, DataExportOptions options, ExportProgressTracker? progress)
     {
         ValidateCsvOptions(options);
         var columns = SelectColumns(options);
@@ -355,12 +394,14 @@ public sealed partial class DataExporter
                 return CsvValue(value, options.CsvProtectFormulas);
             });
             writer.WriteLine(JoinCsv(values, options.CsvDelimiter));
+            progress?.RowWritten();
         }
     }
 
     private static void ValidateCsvOptions(DataExportOptions options)
     {
         ValidateRowWindow(options.RowOffset, options.MaxRows);
+        ExportProgressTracker.Validate(options.ProgressIntervalRows, options.TotalRows);
         if (options.CsvDelimiter is '\0' or '\r' or '\n' or '"')
             throw new ArgumentException("CSV delimiter must not be a quote or newline.", nameof(options));
     }
