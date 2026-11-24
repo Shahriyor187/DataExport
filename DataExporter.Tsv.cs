@@ -21,6 +21,9 @@ public sealed partial class DataExporter
         options ??= new DataExportOptions();
         return new DataExportOptions
         {
+            Progress = options.Progress,
+            ProgressIntervalRows = options.ProgressIntervalRows,
+            TotalRows = options.TotalRows,
             Columns = options.Columns,
             RowOffset = options.RowOffset,
             MaxRows = options.MaxRows,

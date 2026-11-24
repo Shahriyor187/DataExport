@@ -29,6 +29,7 @@ public sealed partial class DataExporter
         Stream destination, StreamingExcelOptions options, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        var progress = ExportProgressTracker.Create(options.Progress, options.ProgressIntervalRows, options.MaxRows == 0 ? 0 : options.TotalRows, cancellationToken);
         var columns = options.Columns?.ToList();
         ValidateStreamingColumns(columns);
         var sheetNames = new List<string>();
@@ -69,6 +70,7 @@ public sealed partial class DataExporter
                     row.TryGetValue(columns[i], out values[i]);
                 sheet.WriteRow(values, header: false);
                 written++;
+                progress?.RowWritten();
                 if (options.MaxRows is long limit && written >= limit) break;
             }
 
@@ -93,6 +95,8 @@ public sealed partial class DataExporter
         WriteRootRelationships(zip);
         WriteContentTypes(zip, sheetNames.Count);
         cancellationToken.ThrowIfCancellationRequested();
+        zip.Dispose();
+        progress?.Finish();
     }
 
     private static string GetSheetName(string baseName, int index)

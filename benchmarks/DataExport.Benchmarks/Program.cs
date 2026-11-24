@@ -7,6 +7,12 @@ using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Xml;
 
+if (args.SequenceEqual(new[] { "--progress" }))
+{
+    await ProgressBenchmark.RunAsync();
+    return;
+}
+
 if (args.Contains("--stress", StringComparer.OrdinalIgnoreCase))
 {
     await StressRunner.RunAsync(args);

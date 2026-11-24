@@ -52,8 +52,11 @@ public sealed partial class DataExporter
     public void ToJson(string filePath, DataExportOptions? options)
     {
         ValidateFilePath(filePath);
-        var json = JsonSerializer.Serialize(SelectedRows(options ?? new DataExportOptions()), JsonOptions);
+        options ??= new DataExportOptions();
+        var progress = BufferedProgress(options);
+        var json = JsonSerializer.Serialize(progress is null ? SelectedRows(options) : TrackedRows(options, progress), JsonOptions);
         File.WriteAllText(filePath, json, Utf8WithoutBom);
+        progress?.Finish();
     }
 
     /// <summary>
@@ -67,10 +70,12 @@ public sealed partial class DataExporter
     {
         ValidateFilePath(filePath);
 
+        options ??= new DataExportOptions();
+        var progress = BufferedProgress(options);
         var document = new XDocument(
             new XDeclaration("1.0", "utf-8", null),
             new XElement("data",
-                SelectedRows(options ?? new DataExportOptions()).Select(record =>
+                (progress is null ? SelectedRows(options) : TrackedRows(options, progress)).Select(record =>
                     new XElement("entry",
                         record.Select(pair =>
                             new XElement(
@@ -84,6 +89,8 @@ public sealed partial class DataExporter
         });
 
         document.Save(writer);
+        writer.Flush();
+        progress?.Finish();
     }
 
     /// <summary>
