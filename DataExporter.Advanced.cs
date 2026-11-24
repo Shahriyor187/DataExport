@@ -89,11 +89,9 @@ public sealed partial class DataExporter
                     var root = new XElement("data");
                     foreach (var row in _data)
                     {
-                        cancellationToken.ThrowIfCancellationRequested();
                         var entry = new XElement("entry");
                         foreach (var pair in row)
                         {
-                            cancellationToken.ThrowIfCancellationRequested();
                             entry.Add(new XElement(XmlConvert.EncodeLocalName(string.IsNullOrEmpty(pair.Key) ? "_" : pair.Key),
                                 FormatValue(pair.Value)));
                         }
