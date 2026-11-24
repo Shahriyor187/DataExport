@@ -23,6 +23,7 @@ public sealed partial class DataExporter
 
         options ??= new DataExportOptions();
         ValidateCsvOptions(options);
+        var progress = ExportProgressTracker.Create(options.Progress, options.ProgressIntervalRows, options.MaxRows == 0 ? 0 : options.TotalRows, cancellationToken);
         var names = Enumerable.Range(0, reader.FieldCount).Select(reader.GetName).ToArray();
         if (names.Any(string.IsNullOrWhiteSpace) ||
             names.Distinct(StringComparer.Ordinal).Count() != names.Length)
@@ -72,11 +73,13 @@ public sealed partial class DataExporter
             cancellationToken.ThrowIfCancellationRequested();
             await writer.WriteLineAsync(JoinCsv(fields, delimiter).AsMemory(), cancellationToken).ConfigureAwait(false);
             written++;
+            progress?.RowWritten();
         }
 
         cancellationToken.ThrowIfCancellationRequested();
         await writer.FlushAsync(cancellationToken).ConfigureAwait(false);
         cancellationToken.ThrowIfCancellationRequested();
+        progress?.Finish();
     }
 
     /// <summary>Streams database records to TSV with tab separators, leaving both caller-owned resources open.</summary>
