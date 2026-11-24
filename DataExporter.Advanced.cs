@@ -419,7 +419,7 @@ public sealed partial class DataExporter
         var formatted = FormatValue(value);
         if (protectFormulas && value is string)
         {
-            var trimmed = formatted.AsSpan().TrimStart();
+            var trimmed = formatted.AsSpan();
             if (!trimmed.IsEmpty && trimmed[0] is '=' or '+' or '-' or '@')
                 return "'" + formatted;
         }
