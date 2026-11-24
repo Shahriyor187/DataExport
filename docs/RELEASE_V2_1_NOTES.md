@@ -1,6 +1,6 @@
-# DataExport v2.1.0 — draft release notes
+# DataExport v2.1.0 — release notes
 
-Not published. Final release depends on Phase 1.8 verification.
+Stable release candidate; publication is pending final validation and explicit approval.
 
 ## Added
 - Dedicated TSV file, stream and async-record exports; ExportFormat.Tsv appended without renumbering previous values.
@@ -27,6 +27,7 @@ Not published. Final release depends on Phase 1.8 verification.
 - One million synthetic records were exported and verified per format: CSV 1.149 s (66.51 MiB peak working set), TSV 1.068 s (63.11 MiB), XLSX 3.385 s (70.21 MiB). These are runner-specific measurements, not guaranteed production performance.
 - No known vulnerabilities reported across 16 resolved dependency entries.
 - Package validation against published v2.0.0 passed.
-- Final stable package validation, refreshed cross-package integration and resource-boundary mutation verification remain release gates.
+- Refreshed cross-package integration passed on .NET 8 and .NET 10. The final resource-boundary mutation was detected on both frameworks.
+- Stable-version package validation remains a release gate. No package has been published.
 
 See README and docs/PRODUCTION_GUIDE.md.
