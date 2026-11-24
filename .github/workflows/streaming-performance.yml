@@ -37,6 +37,8 @@ jobs:
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Set up .NET 10
         uses: actions/setup-dotnet@v4
         with:
@@ -45,7 +47,7 @@ jobs:
         run: dotnet build benchmarks/DataExport.Benchmarks/DataExport.Benchmarks.csproj -c Release
       - name: Generate XLSX, check row counts, and record resource usage
         env:
-          REQUESTED_ROWS: ${{ github.event.inputs.rows || '10000' }}
+          REQUESTED_ROWS: ${{ github.event.inputs.rows || (github.head_ref == 'feat/v21-release-validation' && '1000000') || '10000' }}
           PEAK_LIMIT_MB: ${{ github.event.inputs.max_peak_mb || '0' }}
         run: |
           mkdir -p artifacts/performance
@@ -56,7 +58,7 @@ jobs:
             --results artifacts/performance/streaming-xlsx.json
       - name: Generate and verify CSV and TSV stress exports
         env:
-          REQUESTED_ROWS: ${{ github.event.inputs.rows || '100000' }}
+          REQUESTED_ROWS: ${{ github.event.inputs.rows || (github.head_ref == 'feat/v21-release-validation' && '1000000') || '100000' }}
         run: |
           set -euo pipefail
           for format in csv tsv; do
