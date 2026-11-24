@@ -102,7 +102,7 @@ public sealed partial class DataExporter
         // Preserve the existing behavior for missing requested columns (blank cells).
         var selected = new HashSet<string>(options.Columns!, StringComparer.Ordinal);
         var readOrdinals = Enumerable.Range(0, fieldNames.Length)
-            .Where(i => selected.Contains(fieldNames[i])).ToArray();
+            .ToArray();
         var skippedRow = new Dictionary<string, object?>(StringComparer.Ordinal);
 
         async IAsyncEnumerable<IReadOnlyDictionary<string, object?>> Rows(
