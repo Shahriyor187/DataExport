@@ -5,7 +5,10 @@
     <Nullable>enable</Nullable>
 
     <PackageId>DataExport</PackageId>
-    <Version>2.0.0</Version>
+    <Version>2.1.0</Version>
+    <!-- Compare against the actual published package, not a source snapshot. -->
+    <EnablePackageValidation>true</EnablePackageValidation>
+    <PackageValidationBaselineVersion>2.0.0</PackageValidationBaselineVersion>
     <Authors>Shahriyor Murodilov</Authors>
     <Description>Export C# objects, dictionaries and DataTables to CSV, TSV, JSON, XML and XLSX. Forward-only CSV, TSV and XLSX streaming for async records and DbDataReader, configurable row selection and progress reporting.</Description>
     <PackageTags>data-export;csv;tsv;json;xml;excel;xlsx;streaming;database;dbdatareader;reporting</PackageTags>
