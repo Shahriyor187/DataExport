@@ -46,10 +46,13 @@ public sealed partial class DataExporter
     /// Writes the records as indented JSON using UTF-8 without a byte-order mark.
     /// </summary>
     /// <param name="filePath">Destination file path.</param>
-    public void ToJson(string filePath)
+    public void ToJson(string filePath) => ToJson(filePath, null);
+
+    /// <summary>Writes a selected window of records as JSON.</summary>
+    public void ToJson(string filePath, DataExportOptions? options)
     {
         ValidateFilePath(filePath);
-        var json = JsonSerializer.Serialize(_data, JsonOptions);
+        var json = JsonSerializer.Serialize(SelectedRows(options ?? new DataExportOptions()), JsonOptions);
         File.WriteAllText(filePath, json, Utf8WithoutBom);
     }
 
@@ -57,14 +60,17 @@ public sealed partial class DataExporter
     /// Writes the records as XML. Dictionary keys are encoded as valid XML element names.
     /// </summary>
     /// <param name="filePath">Destination file path.</param>
-    public void ToXml(string filePath)
+    public void ToXml(string filePath) => ToXml(filePath, null);
+
+    /// <summary>Writes a selected window of records as XML.</summary>
+    public void ToXml(string filePath, DataExportOptions? options)
     {
         ValidateFilePath(filePath);
 
         var document = new XDocument(
             new XDeclaration("1.0", "utf-8", null),
             new XElement("data",
-                _data.Select(record =>
+                SelectedRows(options ?? new DataExportOptions()).Select(record =>
                     new XElement("entry",
                         record.Select(pair =>
                             new XElement(
