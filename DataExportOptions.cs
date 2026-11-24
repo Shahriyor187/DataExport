@@ -20,6 +20,13 @@ public enum ExportFormat
 /// <summary>Optional export settings. The existing file-based methods remain available.</summary>
 public sealed class DataExportOptions
 {
+    /// <summary>Optional row progress notifications. Await the export itself to determine success.</summary>
+    public IProgress<ExportProgress>? Progress { get; init; }
+    /// <summary>Number of data rows between progress notifications.</summary>
+    public int ProgressIntervalRows { get; init; } = 1000;
+    /// <summary>Optional estimated number of output data rows for streaming sources, after row selection.</summary>
+    public long? TotalRows { get; init; }
+
     /// <summary>Number of data records to skip before exporting. Headers are excluded.</summary>
     public long RowOffset { get; init; }
     /// <summary>Maximum data records to export, or null for unlimited. Zero exports no data.</summary>
