@@ -18,6 +18,11 @@ public enum ExportFormat
 /// <summary>Optional export settings. The existing file-based methods remain available.</summary>
 public sealed class DataExportOptions
 {
+    /// <summary>Number of data records to skip before exporting. Headers are excluded.</summary>
+    public long RowOffset { get; init; }
+    /// <summary>Maximum data records to export, or null for unlimited. Zero exports no data.</summary>
+    public long? MaxRows { get; init; }
+
     /// <summary>Explicit column names and order, or null to use all discovered columns.</summary>
     public IReadOnlyList<string>? Columns { get; set; }
 

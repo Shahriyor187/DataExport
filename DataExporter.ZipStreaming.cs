@@ -35,13 +35,16 @@ public sealed partial class DataExporter
         using var zip = new ZipArchive(destination, ZipArchiveMode.Create, leaveOpen: true);
 
         StreamingZipWorksheet? sheet = null;
+        long remainingSkip = options.RowOffset, written = 0;
         try
         {
+            if (options.MaxRows != 0)
             await foreach (var row in records.WithCancellation(cancellationToken).ConfigureAwait(false))
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 columns ??= row.Keys.ToList();
                 ValidateStreamingColumns(columns);
+                if (remainingSkip > 0) { remainingSkip--; continue; }
 
                 if (sheet is null || sheet.RowCount == options.MaxRowsPerWorksheet)
                 {
@@ -65,6 +68,8 @@ public sealed partial class DataExporter
                 for (var i = 0; i < columns.Count; i++)
                     row.TryGetValue(columns[i], out values[i]);
                 sheet.WriteRow(values, header: false);
+                written++;
+                if (options.MaxRows is long limit && written >= limit) break;
             }
 
             cancellationToken.ThrowIfCancellationRequested();

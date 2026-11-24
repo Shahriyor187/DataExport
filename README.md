@@ -291,3 +291,8 @@ This package doesn't provide an HTTP endpoint or require ASP.NET Core itself.
 ## Cancellation and memory characteristics (v2.1 development)
 
 Async exports accept cancellation tokens. Cancellation is cooperative: row construction and streaming enumeration check the token, and asynchronous I/O receives it where supported. ClosedXML workbook saving, auto-fit, XML serialization internals, and ZIP finalization may be synchronous and cannot always be interrupted immediately. A caller-owned stream remains open; discard its contents after cancellation or failure, since partial bytes may already have been written. CSV and direct-ZIP XLSX streaming APIs avoid buffering all source rows; `FromObjects`, JSON/XML exports, buffered XLSX and the report builder retain data in memory. Stream output alone is not a low-memory guarantee.
+
+
+## Partial exports (v2.1 development)
+
+Set `RowOffset` and `MaxRows` on `DataExportOptions` or `StreamingExcelOptions` to select a zero-based window of data records. Null MaxRows means unlimited; zero means no data records. Negative values throw ArgumentOutOfRangeException. Headers are excluded from the count. Buffered exports discover columns from the original dataset; streaming exports infer columns from encountered records unless Columns is supplied. For a zero-row streaming export, supply Columns to guarantee headers without enumerating the source. Streaming stops at the requested limit, including across multiple XLSX sheets; caller-owned readers and streams remain open. Skipping rows in a database reader still advances the reader; for large offsets, prefer pagination in the database query itself.
