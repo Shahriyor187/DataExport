@@ -322,3 +322,7 @@ For Excel-to-PDF/DOCX conversions, see [ExcelExportKit](https://github.com/Shahr
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+## Additional v2.1 performance checks
+
+Run `dotnet run -c Release --project benchmarks/DataExport.Benchmarks -- --delimited-stress csv 1000000` (or `tsv`) to generate and verify every record in a synthetic large export. Run the same project with `--progress` to compare enabled and disabled CSV progress. See [draft release notes](https://github.com/Shahriyor187/DataExport/blob/master/docs/RELEASE_V2_1_NOTES.md). These are workload-specific measurements, not guarantees.
