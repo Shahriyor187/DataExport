@@ -4,49 +4,151 @@
 [![Build](https://github.com/Shahriyor187/DataExport/actions/workflows/ci.yml/badge.svg)](https://github.com/Shahriyor187/DataExport/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-A lightweight .NET library for exporting **C# objects, dictionaries, and DataTables** to **JSON, XML, CSV, and Excel (XLSX)**, with configurable output and streaming support.
+Export C# objects, dictionaries and DataTables to JSON, XML, CSV and XLSX; stream async records and database results without materializing the full dataset. The v2.1 source adds TSV, database-to-delimited streaming, row windows and progress reporting.
 
-## Try Export Studio — live sample application
 
-See DataExport and ExcelExportKit **working together** in the [Export Studio demo](https://github.com/Shahriyor187/ExcelExportKit/tree/master/examples/ExportStudio). It's a self-contained ASP.NET Core 10 application with synthetic sales data, an interactive table and one-click CSV/JSON/XML/XLSX/PDF/DOCX downloads.
+> **Release status:** v2.1 features described here are in development until the package is published. For the currently released v2.0.0 API, see the [v2.0.0 source](https://github.com/Shahriyor187/DataExport/tree/v2.0.0). The package targets .NET 8 and .NET 10; prefer a supported .NET 10 runtime in production. Upgrades from 1.x may require changes: `DataExporter` is sealed and JSON uses `System.Text.Json`.
 
-```powershell
-git clone https://github.com/Shahriyor187/ExcelExportKit.git
-cd ExcelExportKit
-dotnet run --project examples/ExportStudio/ExportStudio.csproj --urls http://localhost:5075
+## Requirements
+
+- .NET 8 or .NET 10
+
+## Installation
+
+```bash
+dotnet add package DataExport
 ```
 
-Open [http://localhost:5075](http://localhost:5075). No credentials, database or uploads required.
+## Choose an export API
 
-**Copyable DataExport example:**
+| Source | API | Formats | Memory model |
+| --- | --- | --- | --- |
+| Objects, dictionaries, DataTable | `FromObjects`, `FromDataTable`, `Export`, `ExportAsync` | JSON, XML, CSV, XLSX; TSV in v2.1 | Buffered input |
+| Async records | `WriteCsvAsync`, `WriteExcelStreamingAsync`; `WriteTsvAsync` in v2.1 | CSV, XLSX, TSV | Forward-only source |
+| Database reader | `WriteExcelStreamingAsync`; `WriteCsvAsync`, `WriteTsvAsync` in v2.1 | XLSX, CSV, TSV | Forward-only source |
+| Multiple styled sheets | `ExcelReportBuilder` | XLSX | In-memory workbook |
+
+See the [production integration guide](https://github.com/Shahriyor187/DataExport/blob/master/docs/PRODUCTION_GUIDE.md) for authenticated ASP.NET Core downloads, database ownership and security guidance.
+
+## Quick start
 
 ```csharp
 using DataExportPackage;
 
-var orders = new[]
+var records = new List<Dictionary<string, object>>
 {
-    new { Customer = "Amina", Region = "Tashkent", Revenue = 450m },
-    new { Customer = "Jasur", Region = "Samarkand", Revenue = 320m }
+    new()
+    {
+        ["Name"] = "Amina",
+        ["Age"] = 21,
+        ["Country"] = "Uzbekistan"
+    },
+    new()
+    {
+        ["Name"] = "Ali",
+        ["Age"] = 24,
+        ["Country"] = "Uzbekistan"
+    }
 };
 
-var exporter = DataExporter.FromObjects(orders);
-exporter.ToCsv("orders.csv", new DataExportOptions { CsvProtectFormulas = true });
-exporter.ToExcel("orders.xlsx", new DataExportOptions
+var exporter = new DataExporter(records);
+
+exporter.ToJson("people.json");
+exporter.ToXml("people.xml");
+exporter.ToCsv("people.csv");
+exporter.ToExcel("people.xlsx");
+```
+
+## Supported formats
+
+| Method | Output | Notes |
+| --- | --- | --- |
+| `ToJson(path)` | JSON | Indented JSON, serialized with `System.Text.Json`. |
+| `ToXml(path)` | XML | Creates a `data` root with one `entry` element per record. Invalid XML key characters are encoded. |
+| `ToCsv(path)` | CSV | UTF-8 without BOM, comma-delimited, with quoted fields escaped. |
+| `ToExcel(path)` | XLSX | Creates a worksheet named `Data`; no header row by default, preserving the original API behavior. |
+
+CSV and Excel use the union of all dictionary keys, in the order those keys are first encountered. CSV includes a header row by default. If a record does not contain a particular key, the corresponding cell is empty.
+
+To include an Excel header row:
+
+```csharp
+exporter.ToExcel("people-with-headers.xlsx", includeHeaders: true);
+```
+
+## Additional v2 export APIs
+
+### Export C# objects and DataTables
+
+```csharp
+var users = new[] { new { Name = "Amina", Score = 1450 } };
+DataExporter.Export(users, "users.csv", ExportFormat.Csv);
+var exporter = DataExporter.FromObjects(users);
+var fromTable = DataExporter.FromDataTable(myDataTable);
+```
+
+### Export directly to streams
+
+The stream remains open after export, so web applications can write straight to the response. The CSV encoding can be specified with `DataExportOptions.CsvEncoding` (UTF-8 without BOM by default).
+
+```csharp
+var exporter = DataExporter.FromObjects(users);
+await exporter.ExportAsync(httpContext.Response.Body, ExportFormat.Json,
+    cancellationToken: httpContext.RequestAborted);
+```
+
+For very large CSV exports, use `DataExporter.WriteCsvAsync(IAsyncEnumerable<T>, stream)`. It writes rows as they arrive without holding the entire dataset in memory. For sparse dictionaries, provide an explicit `Columns` list.
+
+### Configure CSV and Excel output
+
+```csharp
+var options = new DataExportOptions
 {
-    WorksheetName = "Orders",
+    Columns = ["Name", "Score"],
+    CsvDelimiter = ';',
+    CsvEncoding = System.Text.Encoding.UTF8,
+    CsvProtectFormulas = true,
+    WorksheetName = "Results",
     ExcelIncludeHeaders = true,
-    ExcelAutoFilter = true
+    ExcelFreezeHeader = true,
+    ExcelAutoFilter = true,
+    ExcelAutoFitColumns = false
+};
+exporter.ToCsv("users.csv", options);
+exporter.ToExcel("users.xlsx", options);
+```
+
+Excel writes numeric, Boolean and date values using native cell types. The original `ToExcel(path)` still omits the header row for compatibility. The options-based CSV methods protect against formula-like values by default. The original `ToCsv(path)` preserves its previous unmodified output for compatibility. For untrusted data, prefer `ToCsv(path, new DataExportOptions())` or `ToCsvAsync`.
+
+### ASP.NET Core download example
+
+```csharp
+app.MapGet("/export/users", async (HttpContext context) =>
+{
+    var users = new[] { new { Name = "Amina", Score = 1450 } };
+    context.Response.ContentType = "text/csv; charset=utf-8";
+    context.Response.Headers.ContentDisposition = "attachment; filename=users.csv";
+    await DataExporter.FromObjects(users)
+        .ExportAsync(context.Response.Body, ExportFormat.Csv,
+            cancellationToken: context.RequestAborted);
 });
 ```
 
-For Excel-to-PDF/DOCX conversions, see [ExcelExportKit](https://github.com/Shahriyor187/ExcelExportKit).
+This package doesn't provide an HTTP endpoint or require ASP.NET Core itself.
 
+## Partial exports (v2.1 development)
 
+Set `RowOffset` and `MaxRows` on `DataExportOptions` or `StreamingExcelOptions` to select a zero-based window of data records. Null MaxRows means unlimited; zero means no data records. Negative values throw ArgumentOutOfRangeException. Headers are excluded from the count. Buffered exports discover columns from the original dataset; streaming exports infer columns from encountered records unless Columns is supplied. For a zero-row streaming export, supply Columns to guarantee headers without enumerating the source. Streaming stops at the requested limit, including across multiple XLSX sheets; caller-owned readers and streams remain open. Skipping rows in a database reader still advances the reader; for large offsets, prefer pagination in the database query itself.
 
-> **Versioning:** Install **DataExport 2.0.0 or newer** to use the v2 features described below. GitHub source and the latest actually available NuGet package can differ, so check the installed package version. Upgrading from 1.x may require changes: `DataExporter` is now sealed and JSON serialization uses `System.Text.Json` rather than Newtonsoft.Json.
+## TSV exports (v2.1 development)
 
-> **Runtime lifecycle:** The package supports `net8.0` for compatibility, but Microsoft ended support for the .NET 8 runtime on November 10, 2026. Prefer supported .NET 10 for new production applications.
+Use `ToTsv(path, options)`, `ToTsvAsync(stream, options, cancellationToken)`, `WriteTsvAsync(records, stream, options, cancellationToken)`, or `ExportFormat.Tsv` with the generic export methods. TSV forces a tab delimiter without modifying the supplied options; CSV encoding, headers, column order, row windows and formula protection remain configurable. Fields containing tabs, double quotes or newlines use CSV-style double-quote escaping. Default encoding is UTF-8 without BOM. Formula protection is enabled by default, and caller-owned streams stay open. Consumers should use a parser supporting quoted TSV, rather than splitting on tabs and newlines.
 
+## Database-to-CSV and TSV streaming (v2.1 development)
+
+Pass a `DbDataReader` positioned before its first record to `DataExporter.WriteCsvAsync(reader, stream, options, cancellationToken)` or `WriteTsvAsync(reader, stream, options, cancellationToken)`. Only the current result set is exported; the reader and stream remain caller-owned. Columns are discovered from reader metadata, so headers can be written even for empty result sets. Explicit column names are matched using ordinal, case-sensitive comparison; alias duplicate or blank database column names in SQL. Selected fields are accessed in ascending source ordinal order and emitted in the requested column order. Database nulls become empty fields.
+
+RowOffset advances the reader without retrieving skipped field values. MaxRows limits data rows without an extra read; zero writes only configured headers and does not advance the reader. For large offsets, prefer database-side pagination. Cancellation is cooperative and depends in part on provider behavior. The destination may contain partial output after cancellation or failure; discard it. Memory usage scales with column metadata and individual row/field sizes, not the complete result set. Large individual database values are not chunk-streamed, and providers may buffer internally. Non-seekable writable streams are supported. TSV uses tab separators and CSV-style quoting; formula protection is enabled by default.
 
 ## Low-memory Excel exports (v2)
 
@@ -66,6 +168,45 @@ await DataExporter.WriteExcelStreamingAsync(
 ```
 
 An overload accepts a live `DbDataReader`. The writer does not dispose your reader or destination stream. On cancellation or failure the partly written XLSX must be discarded. The streaming route does not offer ClosedXML-only features such as automatic column sizing, charts, or Excel formulas. Test large exports before using it in production.
+
+## Export progress (v2.1 development)
+
+Set `Progress` to an `IProgress<ExportProgress>` and `ProgressIntervalRows` to a positive number (default 1000). Reports contain processed data rows, an optional total, and elapsed time since the row-processing tracker was created. Headers and skipped rows are excluded. Reports are emitted at row intervals and once for a remaining count (including zero); a final interval-aligned count is not duplicated. Reports describe processing, not successful finalization or publication. Await the conversion task to determine success. Cancellation is checked before and after synchronous Report calls. Exceptions thrown directly by Report propagate; asynchronously dispatched Progress<T> handlers execute independently and their exceptions cannot be caught by the export. Keep callbacks fast and do not mutate the input, output or options during export. Caller-owned streams can contain partial output on failure and must be discarded.
+
+Buffered exports calculate the selected row count; streaming exports accept an optional `TotalRows` estimate of output rows after selection. An estimate exceeded by the processed count becomes unknown. Unknown totals stay null (a zero-row limit is known to be zero). Progress-enabled DataExport file exports are not transactional; use a separate destination and publish it only after success when preservation matters.
+
+## Multi-sheet Excel report builder
+
+Use `ExcelReportBuilder` to create styled workbooks from several datasets. It supports nested property mapping, custom display headers and number formats, frozen headers, filters, alternating row styles and formula-based total rows.
+
+```csharp
+using var report = new ExcelReportBuilder();
+report.AddSheet("Students", students, new ExcelReportSheetOptions
+{
+    Columns =
+    [
+        new ExcelReportColumn("Name", "Student"),
+        new ExcelReportColumn("Score", "SAT score", "#,##0"),
+        new ExcelReportColumn("Address.City", "City")
+    ]
+});
+report.AddTotals("Students", 2);
+report.AddSheet("Overview", new[] { new { Metric = "Total students", Value = 100 } });
+report.SaveAs("report.xlsx");
+```
+
+This report builder uses an **in-memory workbook**, so use `WriteExcelStreamingAsync` instead for very large exports.
+
+## Cancellation and memory characteristics (v2.1 development)
+
+Async exports accept cancellation tokens. Cancellation is cooperative: row construction and streaming enumeration check the token, and asynchronous I/O receives it where supported. ClosedXML workbook saving, auto-fit, XML serialization internals, and ZIP finalization may be synchronous and cannot always be interrupted immediately. A caller-owned stream remains open; discard its contents after cancellation or failure, since partial bytes may already have been written. CSV and direct-ZIP XLSX streaming APIs avoid buffering all source rows; `FromObjects`, JSON/XML exports, buffered XLSX and the report builder retain data in memory. Stream output alone is not a low-memory guarantee.
+
+## Notes
+
+- The library writes to the file path you provide. The destination directory must already exist.
+- Values in CSV, XML, and Excel are formatted using invariant culture where applicable.
+- Null values are exported as empty strings in CSV, XML, and Excel. JSON preserves null values.
+- The package does not currently export Word or PDF files.
 
 ## Validate performance and large files
 
@@ -139,179 +280,45 @@ Re-run the benchmark with your own data shape, hosting environment, and throughp
 constraints before advertising performance numbers. Generated XLSX files are
 deleted automatically by the harness.
 
-## Multi-sheet Excel report builder
+## Try Export Studio — live sample application
 
-Use `ExcelReportBuilder` to create styled workbooks from several datasets. It supports nested property mapping, custom display headers and number formats, frozen headers, filters, alternating row styles and formula-based total rows.
+See DataExport and ExcelExportKit **working together** in the [Export Studio demo](https://github.com/Shahriyor187/ExcelExportKit/tree/master/examples/ExportStudio). It's a self-contained ASP.NET Core 10 application with synthetic sales data, an interactive table and one-click CSV/JSON/XML/XLSX/PDF/DOCX downloads.
 
-```csharp
-using var report = new ExcelReportBuilder();
-report.AddSheet("Students", students, new ExcelReportSheetOptions
-{
-    Columns =
-    [
-        new ExcelReportColumn("Name", "Student"),
-        new ExcelReportColumn("Score", "SAT score", "#,##0"),
-        new ExcelReportColumn("Address.City", "City")
-    ]
-});
-report.AddTotals("Students", 2);
-report.AddSheet("Overview", new[] { new { Metric = "Total students", Value = 100 } });
-report.SaveAs("report.xlsx");
+```powershell
+git clone https://github.com/Shahriyor187/ExcelExportKit.git
+cd ExcelExportKit
+dotnet run --project examples/ExportStudio/ExportStudio.csproj --urls http://localhost:5075
 ```
 
-This report builder uses an **in-memory workbook**, so use `WriteExcelStreamingAsync` instead for very large exports.
+Open [http://localhost:5075](http://localhost:5075). No credentials, database or uploads required.
 
-## Requirements
-
-- .NET 8 or .NET 10
-
-## Installation
-
-```bash
-dotnet add package DataExport
-```
-
-## Quick start
+**Copyable DataExport example:**
 
 ```csharp
 using DataExportPackage;
 
-var records = new List<Dictionary<string, object>>
+var orders = new[]
 {
-    new()
-    {
-        ["Name"] = "Amina",
-        ["Age"] = 21,
-        ["Country"] = "Uzbekistan"
-    },
-    new()
-    {
-        ["Name"] = "Ali",
-        ["Age"] = 24,
-        ["Country"] = "Uzbekistan"
-    }
+    new { Customer = "Amina", Region = "Tashkent", Revenue = 450m },
+    new { Customer = "Jasur", Region = "Samarkand", Revenue = 320m }
 };
 
-var exporter = new DataExporter(records);
-
-exporter.ToJson("people.json");
-exporter.ToXml("people.xml");
-exporter.ToCsv("people.csv");
-exporter.ToExcel("people.xlsx");
+var exporter = DataExporter.FromObjects(orders);
+exporter.ToCsv("orders.csv", new DataExportOptions { CsvProtectFormulas = true });
+exporter.ToExcel("orders.xlsx", new DataExportOptions
+{
+    WorksheetName = "Orders",
+    ExcelIncludeHeaders = true,
+    ExcelAutoFilter = true
+});
 ```
 
-## Supported formats
+For Excel-to-PDF/DOCX conversions, see [ExcelExportKit](https://github.com/Shahriyor187/ExcelExportKit).
 
-| Method | Output | Notes |
-| --- | --- | --- |
-| `ToJson(path)` | JSON | Indented JSON, serialized with `System.Text.Json`. |
-| `ToXml(path)` | XML | Creates a `data` root with one `entry` element per record. Invalid XML key characters are encoded. |
-| `ToCsv(path)` | CSV | UTF-8 without BOM, comma-delimited, with quoted fields escaped. |
-| `ToExcel(path)` | XLSX | Creates a worksheet named `Data`; no header row by default, preserving the original API behavior. |
 
-CSV and Excel use the union of all dictionary keys, in the order those keys are first encountered. CSV includes a header row by default. If a record does not contain a particular key, the corresponding cell is empty.
 
-To include an Excel header row:
 
-```csharp
-exporter.ToExcel("people-with-headers.xlsx", includeHeaders: true);
-```
-
-## Notes
-
-- The library writes to the file path you provide. The destination directory must already exist.
-- Values in CSV, XML, and Excel are formatted using invariant culture where applicable.
-- Null values are exported as empty strings in CSV, XML, and Excel. JSON preserves null values.
-- The package does not currently export Word or PDF files.
 
 ## License
 
 MIT. See [LICENSE](LICENSE).
-
-## Additional v2 export APIs
-
-### Export C# objects and DataTables
-
-```csharp
-var users = new[] { new { Name = "Amina", Score = 1450 } };
-DataExporter.Export(users, "users.csv", ExportFormat.Csv);
-var exporter = DataExporter.FromObjects(users);
-var fromTable = DataExporter.FromDataTable(myDataTable);
-```
-
-### Export directly to streams
-
-The stream remains open after export, so web applications can write straight to the response. The CSV encoding can be specified with `DataExportOptions.CsvEncoding` (UTF-8 without BOM by default).
-
-```csharp
-var exporter = DataExporter.FromObjects(users);
-await exporter.ExportAsync(httpContext.Response.Body, ExportFormat.Json,
-    cancellationToken: httpContext.RequestAborted);
-```
-
-For very large CSV exports, use `DataExporter.WriteCsvAsync(IAsyncEnumerable<T>, stream)`. It writes rows as they arrive without holding the entire dataset in memory. For sparse dictionaries, provide an explicit `Columns` list.
-
-### Configure CSV and Excel output
-
-```csharp
-var options = new DataExportOptions
-{
-    Columns = ["Name", "Score"],
-    CsvDelimiter = ';',
-    CsvEncoding = System.Text.Encoding.UTF8,
-    CsvProtectFormulas = true,
-    WorksheetName = "Results",
-    ExcelIncludeHeaders = true,
-    ExcelFreezeHeader = true,
-    ExcelAutoFilter = true,
-    ExcelAutoFitColumns = false
-};
-exporter.ToCsv("users.csv", options);
-exporter.ToExcel("users.xlsx", options);
-```
-
-Excel writes numeric, Boolean and date values using native cell types. The original `ToExcel(path)` still omits the header row for compatibility. The options-based CSV methods protect against formula-like values by default. The original `ToCsv(path)` preserves its previous unmodified output for compatibility. For untrusted data, prefer `ToCsv(path, new DataExportOptions())` or `ToCsvAsync`.
-
-### ASP.NET Core download example
-
-```csharp
-app.MapGet("/export/users", async (HttpContext context) =>
-{
-    var users = new[] { new { Name = "Amina", Score = 1450 } };
-    context.Response.ContentType = "text/csv; charset=utf-8";
-    context.Response.Headers.ContentDisposition = "attachment; filename=users.csv";
-    await DataExporter.FromObjects(users)
-        .ExportAsync(context.Response.Body, ExportFormat.Csv,
-            cancellationToken: context.RequestAborted);
-});
-```
-
-This package doesn't provide an HTTP endpoint or require ASP.NET Core itself.
-
-## Cancellation and memory characteristics (v2.1 development)
-
-Async exports accept cancellation tokens. Cancellation is cooperative: row construction and streaming enumeration check the token, and asynchronous I/O receives it where supported. ClosedXML workbook saving, auto-fit, XML serialization internals, and ZIP finalization may be synchronous and cannot always be interrupted immediately. A caller-owned stream remains open; discard its contents after cancellation or failure, since partial bytes may already have been written. CSV and direct-ZIP XLSX streaming APIs avoid buffering all source rows; `FromObjects`, JSON/XML exports, buffered XLSX and the report builder retain data in memory. Stream output alone is not a low-memory guarantee.
-
-
-## Partial exports (v2.1 development)
-
-Set `RowOffset` and `MaxRows` on `DataExportOptions` or `StreamingExcelOptions` to select a zero-based window of data records. Null MaxRows means unlimited; zero means no data records. Negative values throw ArgumentOutOfRangeException. Headers are excluded from the count. Buffered exports discover columns from the original dataset; streaming exports infer columns from encountered records unless Columns is supplied. For a zero-row streaming export, supply Columns to guarantee headers without enumerating the source. Streaming stops at the requested limit, including across multiple XLSX sheets; caller-owned readers and streams remain open. Skipping rows in a database reader still advances the reader; for large offsets, prefer pagination in the database query itself.
-
-
-## TSV exports (v2.1 development)
-
-Use `ToTsv(path, options)`, `ToTsvAsync(stream, options, cancellationToken)`, `WriteTsvAsync(records, stream, options, cancellationToken)`, or `ExportFormat.Tsv` with the generic export methods. TSV forces a tab delimiter without modifying the supplied options; CSV encoding, headers, column order, row windows and formula protection remain configurable. Fields containing tabs, double quotes or newlines use CSV-style double-quote escaping. Default encoding is UTF-8 without BOM. Formula protection is enabled by default, and caller-owned streams stay open. Consumers should use a parser supporting quoted TSV, rather than splitting on tabs and newlines.
-
-
-## Database-to-CSV and TSV streaming (v2.1 development)
-
-Pass a `DbDataReader` positioned before its first record to `DataExporter.WriteCsvAsync(reader, stream, options, cancellationToken)` or `WriteTsvAsync(reader, stream, options, cancellationToken)`. Only the current result set is exported; the reader and stream remain caller-owned. Columns are discovered from reader metadata, so headers can be written even for empty result sets. Explicit column names are matched using ordinal, case-sensitive comparison; alias duplicate or blank database column names in SQL. Selected fields are accessed in ascending source ordinal order and emitted in the requested column order. Database nulls become empty fields.
-
-RowOffset advances the reader without retrieving skipped field values. MaxRows limits data rows without an extra read; zero writes only configured headers and does not advance the reader. For large offsets, prefer database-side pagination. Cancellation is cooperative and depends in part on provider behavior. The destination may contain partial output after cancellation or failure; discard it. Memory usage scales with column metadata and individual row/field sizes, not the complete result set. Large individual database values are not chunk-streamed, and providers may buffer internally. Non-seekable writable streams are supported. TSV uses tab separators and CSV-style quoting; formula protection is enabled by default.
-
-
-## Export progress (v2.1 development)
-
-Set `Progress` to an `IProgress<ExportProgress>` and `ProgressIntervalRows` to a positive number (default 1000). Reports contain processed data rows, an optional total, and elapsed time since the row-processing tracker was created. Headers and skipped rows are excluded. Reports are emitted at row intervals and once for a remaining count (including zero); a final interval-aligned count is not duplicated. Reports describe processing, not successful finalization or publication. Await the conversion task to determine success. Cancellation is checked before and after synchronous Report calls. Exceptions thrown directly by Report propagate; asynchronously dispatched Progress<T> handlers execute independently and their exceptions cannot be caught by the export. Keep callbacks fast and do not mutate the input, output or options during export. Caller-owned streams can contain partial output on failure and must be discarded.
-
-Buffered exports calculate the selected row count; streaming exports accept an optional `TotalRows` estimate of output rows after selection. An estimate exceeded by the processed count becomes unknown. Unknown totals stay null (a zero-row limit is known to be zero). Progress-enabled DataExport file exports are not transactional; use a separate destination and publish it only after success when preservation matters.
