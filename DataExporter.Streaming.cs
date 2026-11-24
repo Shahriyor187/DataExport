@@ -6,6 +6,13 @@ namespace DataExportPackage;
 /// <summary>Options for the forward-only XLSX writer.</summary>
 public sealed class StreamingExcelOptions
 {
+    /// <summary>Optional row progress notifications. Await the export itself to determine success.</summary>
+    public IProgress<ExportProgress>? Progress { get; init; }
+    /// <summary>Number of data rows between progress notifications.</summary>
+    public int ProgressIntervalRows { get; init; } = 1000;
+    /// <summary>Optional estimated number of output data rows for streaming sources, after row selection.</summary>
+    public long? TotalRows { get; init; }
+
     /// <summary>Number of data records to skip before exporting. Headers are excluded.</summary>
     public long RowOffset { get; init; }
     /// <summary>Maximum data records to export, or null for unlimited. Zero exports no data.</summary>
@@ -84,7 +91,10 @@ public sealed partial class DataExporter
                 SplitLargeWorksheets = options.SplitLargeWorksheets,
                 MaxRowsPerWorksheet = options.MaxRowsPerWorksheet,
                 RowOffset = options.RowOffset,
-                MaxRows = options.MaxRows
+                MaxRows = options.MaxRows,
+                Progress = options.Progress,
+                ProgressIntervalRows = options.ProgressIntervalRows,
+                TotalRows = options.TotalRows
             };
 
         async IAsyncEnumerable<IReadOnlyDictionary<string, object?>> Rows(
@@ -115,6 +125,7 @@ public sealed partial class DataExporter
     private static void ValidateStreamingExcelArguments(Stream destination, StreamingExcelOptions options)
     {
         ValidateRowWindow(options.RowOffset, options.MaxRows);
+        ExportProgressTracker.Validate(options.ProgressIntervalRows, options.TotalRows);
         ArgumentNullException.ThrowIfNull(destination);
         // ZipArchiveMode.Create supports writable non-seekable streams.
         if (!destination.CanWrite)
