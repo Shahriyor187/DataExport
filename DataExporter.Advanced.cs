@@ -11,6 +11,25 @@ namespace DataExportPackage;
 
 public sealed partial class DataExporter
 {
+    private static void ValidateRowWindow(long offset, long? limit)
+    {
+        if (offset < 0) throw new ArgumentOutOfRangeException("RowOffset");
+        if (limit is < 0) throw new ArgumentOutOfRangeException("MaxRows");
+    }
+
+    private (int Start, int Count) RowWindow(DataExportOptions options)
+    {
+        ValidateRowWindow(options.RowOffset, options.MaxRows);
+        var start = (int)Math.Min(options.RowOffset, _data.Count);
+        return (start, (int)Math.Min(options.MaxRows ?? long.MaxValue, _data.Count - start));
+    }
+
+    private IEnumerable<Dictionary<string, object>> SelectedRows(DataExportOptions options)
+    {
+        var (start, count) = RowWindow(options);
+        for (var i = 0; i < count; i++) yield return _data[start + i];
+    }
+
     /// <summary>Creates an exporter from regular C# objects or dictionaries.</summary>
     public static DataExporter FromObjects<T>(IEnumerable<T> records)
     {
@@ -46,14 +65,16 @@ public sealed partial class DataExporter
     /// <summary>Exports C# objects directly to a file, without manually creating dictionaries.</summary>
     public static void Export<T>(IEnumerable<T> records, string filePath, ExportFormat format, DataExportOptions? options = null)
     {
+        options ??= new DataExportOptions();
+        ValidateRowWindow(options.RowOffset, options.MaxRows);
         var exporter = FromObjects(records);
         switch (format)
         {
             case ExportFormat.Json:
-                exporter.ToJson(filePath);
+                exporter.ToJson(filePath, options);
                 break;
             case ExportFormat.Xml:
-                exporter.ToXml(filePath);
+                exporter.ToXml(filePath, options);
                 break;
             case ExportFormat.Csv:
                 exporter.ToCsv(filePath, options);
@@ -71,11 +92,13 @@ public sealed partial class DataExporter
     {
         ArgumentNullException.ThrowIfNull(output);
         cancellationToken.ThrowIfCancellationRequested();
+        options ??= new DataExportOptions();
+        ValidateRowWindow(options.RowOffset, options.MaxRows);
 
         switch (format)
         {
             case ExportFormat.Json:
-                await JsonSerializer.SerializeAsync(output, _data, JsonOptions, cancellationToken).ConfigureAwait(false);
+                await JsonSerializer.SerializeAsync(output, SelectedRows(options), JsonOptions, cancellationToken).ConfigureAwait(false);
                 break;
             case ExportFormat.Xml:
                 using (var writer = XmlWriter.Create(output, new XmlWriterSettings
@@ -87,7 +110,7 @@ public sealed partial class DataExporter
                 }))
                 {
                     var root = new XElement("data");
-                    foreach (var row in _data)
+                    foreach (var row in SelectedRows(options))
                     {
                         cancellationToken.ThrowIfCancellationRequested();
                         var entry = new XElement("entry");
@@ -120,6 +143,8 @@ public sealed partial class DataExporter
     public void ToCsv(string filePath, DataExportOptions? options)
     {
         ValidateFilePath(filePath);
+        options ??= new DataExportOptions();
+        ValidateRowWindow(options.RowOffset, options.MaxRows);
         using var output = File.Create(filePath);
         using var writer = new StreamWriter(output, options?.CsvEncoding ?? Utf8WithoutBom, 8192, leaveOpen: true);
         WriteCsvRows(writer, options ?? new DataExportOptions());
@@ -137,7 +162,7 @@ public sealed partial class DataExporter
         cancellationToken.ThrowIfCancellationRequested();
         if (options.CsvIncludeHeaders && columns.Count > 0)
             await writer.WriteLineAsync(JoinCsv(columns.Select(column => CsvValue(column, options.CsvProtectFormulas)), options.CsvDelimiter).AsMemory(), cancellationToken).ConfigureAwait(false);
-        foreach (var row in _data)
+        foreach (var row in SelectedRows(options))
         {
             cancellationToken.ThrowIfCancellationRequested();
             var values = columns.Select(key =>
@@ -168,7 +193,9 @@ public sealed partial class DataExporter
         await using var writer = new StreamWriter(output, options.CsvEncoding ?? Utf8WithoutBom, 8192, leaveOpen: true);
         List<string>? columns = options.Columns?.ToList();
         var headerWritten = false;
+        long remainingSkip = options.RowOffset, written = 0;
 
+        if (options.MaxRows != 0)
         await foreach (var record in records.WithCancellation(cancellationToken).ConfigureAwait(false))
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -182,6 +209,7 @@ public sealed partial class DataExporter
                     await writer.WriteLineAsync(JoinCsv(columns.Select(column => CsvValue(column, options.CsvProtectFormulas)), options.CsvDelimiter).AsMemory(), cancellationToken).ConfigureAwait(false);
                 headerWritten = true;
             }
+            if (remainingSkip > 0) { remainingSkip--; continue; }
 
             var values = columns.Select(key =>
             {
@@ -189,7 +217,12 @@ public sealed partial class DataExporter
                 return CsvValue(value, options.CsvProtectFormulas);
             });
             await writer.WriteLineAsync(JoinCsv(values, options.CsvDelimiter).AsMemory(), cancellationToken).ConfigureAwait(false);
+            written++;
+            if (options.MaxRows is long limit && written >= limit) break;
         }
+        if (!headerWritten && options.CsvIncludeHeaders && columns is { Count: > 0 } &&
+            (options.RowOffset != 0 || options.MaxRows is not null))
+            await writer.WriteLineAsync(JoinCsv(columns.Select(column => CsvValue(column, options.CsvProtectFormulas)), options.CsvDelimiter).AsMemory(), cancellationToken).ConfigureAwait(false);
         cancellationToken.ThrowIfCancellationRequested();
         await writer.FlushAsync(cancellationToken).ConfigureAwait(false);
         cancellationToken.ThrowIfCancellationRequested();
@@ -199,6 +232,8 @@ public sealed partial class DataExporter
     public void ToExcel(string filePath, DataExportOptions? options)
     {
         ValidateFilePath(filePath);
+        options ??= new DataExportOptions();
+        ValidateRowWindow(options.RowOffset, options.MaxRows);
         using var output = File.Create(filePath);
         ToExcel(output, options);
     }
@@ -214,8 +249,9 @@ public sealed partial class DataExporter
         options ??= new DataExportOptions();
         ArgumentException.ThrowIfNullOrWhiteSpace(options.WorksheetName);
         var columns = SelectColumns(options, cancellationToken);
+        var (start, count) = RowWindow(options);
         var firstDataRow = options.ExcelIncludeHeaders && columns.Count > 0 ? 2 : 1;
-        if ((long)_data.Count + firstDataRow - 1 > 1_048_576)
+        if ((long)count + firstDataRow - 1 > 1_048_576)
             throw new InvalidOperationException("The data exceeds Excel's worksheet row limit.");
         if (columns.Count > 16_384)
             throw new InvalidOperationException("The data exceeds Excel's worksheet column limit.");
@@ -233,10 +269,10 @@ public sealed partial class DataExporter
                 worksheet.Row(1).Style.Font.Bold = true;
         }
 
-        for (var rowIndex = 0; rowIndex < _data.Count; rowIndex++)
+        for (var rowIndex = 0; rowIndex < count; rowIndex++)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var row = _data[rowIndex];
+            var row = _data[start + rowIndex];
             for (var colIndex = 0; colIndex < columns.Count; colIndex++)
             {
                 row.TryGetValue(columns[colIndex], out var value);
@@ -249,7 +285,7 @@ public sealed partial class DataExporter
             if (options.ExcelFreezeHeader)
                 worksheet.SheetView.FreezeRows(1);
             if (options.ExcelAutoFilter)
-                worksheet.Range(1, 1, Math.Max(1, _data.Count + 1), columns.Count).SetAutoFilter();
+                worksheet.Range(1, 1, Math.Max(1, count + 1), columns.Count).SetAutoFilter();
         }
         cancellationToken.ThrowIfCancellationRequested();
         if (columns.Count > 0 && options.ExcelAutoFitColumns)
@@ -305,7 +341,7 @@ public sealed partial class DataExporter
 
         if (options.CsvIncludeHeaders)
             writer.WriteLine(JoinCsv(columns.Select(column => CsvValue(column, options.CsvProtectFormulas)), options.CsvDelimiter));
-        foreach (var row in _data)
+        foreach (var row in SelectedRows(options))
         {
             var values = columns.Select(key =>
             {
@@ -318,6 +354,7 @@ public sealed partial class DataExporter
 
     private static void ValidateCsvOptions(DataExportOptions options)
     {
+        ValidateRowWindow(options.RowOffset, options.MaxRows);
         if (options.CsvDelimiter is '\0' or '\r' or '\n' or '"')
             throw new ArgumentException("CSV delimiter must not be a quote or newline.", nameof(options));
     }
