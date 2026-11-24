@@ -97,17 +97,40 @@ public sealed partial class DataExporter
                 TotalRows = options.TotalRows
             };
 
+        // The ZIP writer applies the row window. Supply empty rows for its
+        // skipped records so no skipped or unselected field values are loaded.
+        // Preserve the existing behavior for missing requested columns (blank cells).
+        var selected = new HashSet<string>(options.Columns!, StringComparer.Ordinal);
+        var readOrdinals = Enumerable.Range(0, fieldNames.Length)
+            .Where(i => selected.Contains(fieldNames[i])).ToArray();
+        var skippedRow = new Dictionary<string, object?>(StringComparer.Ordinal);
+
         async IAsyncEnumerable<IReadOnlyDictionary<string, object?>> Rows(
             [EnumeratorCancellation] CancellationToken ct)
         {
-            while (await reader.ReadAsync(ct).ConfigureAwait(false))
+            long remainingSkip = options.RowOffset;
+            while (true)
             {
                 ct.ThrowIfCancellationRequested();
-                var row = new Dictionary<string, object?>(fieldNames.Length, StringComparer.Ordinal);
-                for (var i = 0; i < fieldNames.Length; i++)
-                    row.Add(fieldNames[i], await reader.IsDBNullAsync(i, ct).ConfigureAwait(false)
-                        ? null
-                        : reader.GetValue(i));
+                var hasRow = await reader.ReadAsync(ct).ConfigureAwait(false);
+                ct.ThrowIfCancellationRequested();
+                if (!hasRow) yield break;
+                if (remainingSkip > 0)
+                {
+                    remainingSkip--;
+                    yield return skippedRow;
+                    continue;
+                }
+                var row = new Dictionary<string, object?>(readOrdinals.Length, StringComparer.Ordinal);
+                foreach (var i in readOrdinals)
+                {
+                    ct.ThrowIfCancellationRequested();
+                    var isNull = await reader.IsDBNullAsync(i, ct).ConfigureAwait(false);
+                    ct.ThrowIfCancellationRequested();
+                    var value = isNull ? null : reader.GetValue(i);
+                    ct.ThrowIfCancellationRequested();
+                    row.Add(fieldNames[i], value);
+                }
                 yield return row;
             }
         }
