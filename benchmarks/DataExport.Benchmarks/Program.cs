@@ -13,6 +13,12 @@ if (args.SequenceEqual(new[] { "--progress" }))
     return;
 }
 
+if (args.Length > 0 && args[0] == "--delimited-stress")
+{
+    await DelimitedStress.RunAsync(args);
+    return;
+}
+
 if (args.Contains("--stress", StringComparer.OrdinalIgnoreCase))
 {
     await StressRunner.RunAsync(args);
