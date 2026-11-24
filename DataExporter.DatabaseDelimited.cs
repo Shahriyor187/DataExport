@@ -54,7 +54,7 @@ public sealed partial class DataExporter
             await writer.WriteLineAsync(JoinCsv(columns.Select(c => CsvValue(c, protect)), delimiter).AsMemory(), cancellationToken).ConfigureAwait(false);
 
         long written = 0;
-        while (limit is null || written < limit.Value)
+        while (limit is null || written <= limit.Value)
         {
             cancellationToken.ThrowIfCancellationRequested();
             var hasRow = await reader.ReadAsync(cancellationToken).ConfigureAwait(false);
