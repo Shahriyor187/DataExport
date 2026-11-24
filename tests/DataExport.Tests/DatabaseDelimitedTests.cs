@@ -170,6 +170,46 @@ public sealed class DatabaseDelimitedTests
         Assert.Equal("3\t=1+1" + Environment.NewLine, Encoding.Unicode.GetString(output.ToArray()).TrimStart('\uFEFF'));
     }
 
+    [Fact]
+    public async Task XlsxSkipsUnselectedFieldsAndStopsAtLimit()
+    {
+        using var table = Table();
+        using var reader = new TrackingReader(table.CreateDataReader());
+        using var output = new MemoryStream();
+        await DataExporter.WriteExcelStreamingAsync(reader, output, new StreamingExcelOptions
+        {
+            Columns = new[] { "Text", "Id" }, RowOffset = 1, MaxRows = 3
+        });
+        Assert.Equal(4, reader.ReadCalls);
+        Assert.Equal(new[] { (2, 0), (2, 2), (3, 0), (3, 2), (4, 0), (4, 2) }, reader.NullChecks);
+        Assert.Equal(new[] { (2, 0), (2, 2), (3, 0), (3, 2), (4, 0) }, reader.ValueReads);
+        Assert.False(reader.IsClosed);
+        output.Position = 0;
+        using var workbook = new ClosedXML.Excel.XLWorkbook(output);
+        var sheet = workbook.Worksheet(1);
+        Assert.Equal("Text", sheet.Cell(1, 1).GetString());
+        Assert.Equal(2, sheet.Cell(2, 2).GetValue<int>());
+        Assert.Equal("=1+1", sheet.Cell(3, 1).GetString());
+        Assert.False(sheet.Cell(3, 1).HasFormula);
+    }
+
+    [Fact]
+    public async Task XlsxCancellationDuringNullCheckStopsBeforeValueRead()
+    {
+        using var table = Table();
+        using var reader = new TrackingReader(table.CreateDataReader());
+        using var output = new MemoryStream();
+        using var cancel = new CancellationTokenSource();
+        reader.AfterNullCheck = () => cancel.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            DataExporter.WriteExcelStreamingAsync(reader, output, cancellationToken: cancel.Token));
+        Assert.Equal(1, reader.ReadCalls);
+        Assert.Single(reader.NullChecks);
+        Assert.Empty(reader.ValueReads);
+        Assert.True(output.CanWrite);
+        Assert.False(reader.IsClosed);
+    }
+
     private sealed class NonSeekableOutput : MemoryStream
     {
         public override bool CanSeek => false;
