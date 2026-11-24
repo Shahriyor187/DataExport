@@ -296,3 +296,8 @@ Async exports accept cancellation tokens. Cancellation is cooperative: row const
 ## Partial exports (v2.1 development)
 
 Set `RowOffset` and `MaxRows` on `DataExportOptions` or `StreamingExcelOptions` to select a zero-based window of data records. Null MaxRows means unlimited; zero means no data records. Negative values throw ArgumentOutOfRangeException. Headers are excluded from the count. Buffered exports discover columns from the original dataset; streaming exports infer columns from encountered records unless Columns is supplied. For a zero-row streaming export, supply Columns to guarantee headers without enumerating the source. Streaming stops at the requested limit, including across multiple XLSX sheets; caller-owned readers and streams remain open. Skipping rows in a database reader still advances the reader; for large offsets, prefer pagination in the database query itself.
+
+
+## TSV exports (v2.1 development)
+
+Use `ToTsv(path, options)`, `ToTsvAsync(stream, options, cancellationToken)`, `WriteTsvAsync(records, stream, options, cancellationToken)`, or `ExportFormat.Tsv` with the generic export methods. TSV forces a tab delimiter without modifying the supplied options; CSV encoding, headers, column order, row windows and formula protection remain configurable. Fields containing tabs, double quotes or newlines use CSV-style double-quote escaping. Default encoding is UTF-8 without BOM. Formula protection is enabled by default, and caller-owned streams stay open. Consumers should use a parser supporting quoted TSV, rather than splitting on tabs and newlines.
