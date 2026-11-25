@@ -4,10 +4,10 @@
 [![Build](https://github.com/Shahriyor187/DataExport/actions/workflows/ci.yml/badge.svg)](https://github.com/Shahriyor187/DataExport/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-Export C# objects, dictionaries and DataTables to JSON, XML, CSV and XLSX; stream async records and database results without materializing the full dataset. The v2.1 source adds TSV, database-to-delimited streaming, row windows and progress reporting.
+Export C# objects, dictionaries and DataTables to JSON, XML, CSV, TSV and XLSX; stream async records and database results without materializing the full dataset. Version 2.1.0 includes dedicated TSV exports, database-to-CSV/TSV streaming, row windows and progress reporting.
 
 
-> **Release status:** v2.1 features described here are in development until the package is published. For the currently released v2.0.0 API, see the [v2.0.0 source](https://github.com/Shahriyor187/DataExport/tree/v2.0.0). The package targets .NET 8 and .NET 10; prefer a supported .NET 10 runtime in production. Upgrades from 1.x may require changes: `DataExporter` is sealed and JSON uses `System.Text.Json`.
+> **Release status:** [v2.1.0 is available on NuGet](https://www.nuget.org/packages/DataExport/2.1.0). All features described below are available in v2.1.0. See the [release notes](docs/RELEASE_V2_1_NOTES.md) and [v2.0.0 source](https://github.com/Shahriyor187/DataExport/tree/v2.0.0) for earlier-version reference. The package targets .NET 8 and .NET 10; prefer a supported .NET 10 runtime in production. Upgrades from 1.x may require changes: `DataExporter` is sealed and JSON uses `System.Text.Json`.
 
 ## Requirements
 
@@ -23,9 +23,9 @@ dotnet add package DataExport
 
 | Source | API | Formats | Memory model |
 | --- | --- | --- | --- |
-| Objects, dictionaries, DataTable | `FromObjects`, `FromDataTable`, `Export`, `ExportAsync` | JSON, XML, CSV, XLSX; TSV in v2.1 | Buffered input |
-| Async records | `WriteCsvAsync`, `WriteExcelStreamingAsync`; `WriteTsvAsync` in v2.1 | CSV, XLSX, TSV | Forward-only source |
-| Database reader | `WriteExcelStreamingAsync`; `WriteCsvAsync`, `WriteTsvAsync` in v2.1 | XLSX, CSV, TSV | Forward-only source |
+| Objects, dictionaries, DataTable | `FromObjects`, `FromDataTable`, `Export`, `ExportAsync` | JSON, XML, CSV, TSV, XLSX | Buffered input |
+| Async records | `WriteCsvAsync`, `WriteTsvAsync`, `WriteExcelStreamingAsync` | CSV, XLSX, TSV | Forward-only source |
+| Database reader | `WriteExcelStreamingAsync`, `WriteCsvAsync`, `WriteTsvAsync` | XLSX, CSV, TSV | Forward-only source |
 | Multiple styled sheets | `ExcelReportBuilder` | XLSX | In-memory workbook |
 
 See the [production integration guide](https://github.com/Shahriyor187/DataExport/blob/master/docs/PRODUCTION_GUIDE.md) for authenticated ASP.NET Core downloads, database ownership and security guidance.
@@ -66,6 +66,7 @@ exporter.ToExcel("people.xlsx");
 | `ToJson(path)` | JSON | Indented JSON, serialized with `System.Text.Json`. |
 | `ToXml(path)` | XML | Creates a `data` root with one `entry` element per record. Invalid XML key characters are encoded. |
 | `ToCsv(path)` | CSV | UTF-8 without BOM, comma-delimited, with quoted fields escaped. |
+| `ToTsv(path, options)` | TSV | UTF-8 without BOM, tab-delimited, with quoted fields escaped. |
 | `ToExcel(path)` | XLSX | Creates a worksheet named `Data`; no header row by default, preserving the original API behavior. |
 
 CSV and Excel use the union of all dictionary keys, in the order those keys are first encountered. CSV includes a header row by default. If a record does not contain a particular key, the corresponding cell is empty.
@@ -136,15 +137,15 @@ app.MapGet("/export/users", async (HttpContext context) =>
 
 This package doesn't provide an HTTP endpoint or require ASP.NET Core itself.
 
-## Partial exports (v2.1 development)
+## Partial exports (v2.1)
 
 Set `RowOffset` and `MaxRows` on `DataExportOptions` or `StreamingExcelOptions` to select a zero-based window of data records. Null MaxRows means unlimited; zero means no data records. Negative values throw ArgumentOutOfRangeException. Headers are excluded from the count. Buffered exports discover columns from the original dataset; streaming exports infer columns from encountered records unless Columns is supplied. For a zero-row streaming export, supply Columns to guarantee headers without enumerating the source. Streaming stops at the requested limit, including across multiple XLSX sheets; caller-owned readers and streams remain open. Skipping rows in a database reader still advances the reader; for large offsets, prefer pagination in the database query itself.
 
-## TSV exports (v2.1 development)
+## TSV exports (v2.1)
 
 Use `ToTsv(path, options)`, `ToTsvAsync(stream, options, cancellationToken)`, `WriteTsvAsync(records, stream, options, cancellationToken)`, or `ExportFormat.Tsv` with the generic export methods. TSV forces a tab delimiter without modifying the supplied options; CSV encoding, headers, column order, row windows and formula protection remain configurable. Fields containing tabs, double quotes or newlines use CSV-style double-quote escaping. Default encoding is UTF-8 without BOM. Formula protection is enabled by default, and caller-owned streams stay open. Consumers should use a parser supporting quoted TSV, rather than splitting on tabs and newlines.
 
-## Database-to-CSV and TSV streaming (v2.1 development)
+## Database-to-CSV and TSV streaming (v2.1)
 
 Pass a `DbDataReader` positioned before its first record to `DataExporter.WriteCsvAsync(reader, stream, options, cancellationToken)` or `WriteTsvAsync(reader, stream, options, cancellationToken)`. Only the current result set is exported; the reader and stream remain caller-owned. Columns are discovered from reader metadata, so headers can be written even for empty result sets. Explicit column names are matched using ordinal, case-sensitive comparison; alias duplicate or blank database column names in SQL. Selected fields are accessed in ascending source ordinal order and emitted in the requested column order. Database nulls become empty fields.
 
@@ -169,7 +170,7 @@ await DataExporter.WriteExcelStreamingAsync(
 
 An overload accepts a live `DbDataReader`. The writer does not dispose your reader or destination stream. On cancellation or failure the partly written XLSX must be discarded. The streaming route does not offer ClosedXML-only features such as automatic column sizing, charts, or Excel formulas. Test large exports before using it in production.
 
-## Export progress (v2.1 development)
+## Export progress (v2.1)
 
 Set `Progress` to an `IProgress<ExportProgress>` and `ProgressIntervalRows` to a positive number (default 1000). Reports contain processed data rows, an optional total, and elapsed time since the row-processing tracker was created. Headers and skipped rows are excluded. Reports are emitted at row intervals and once for a remaining count (including zero); a final interval-aligned count is not duplicated. Reports describe processing, not successful finalization or publication. Await the conversion task to determine success. Cancellation is checked before and after synchronous Report calls. Exceptions thrown directly by Report propagate; asynchronously dispatched Progress<T> handlers execute independently and their exceptions cannot be caught by the export. Keep callbacks fast and do not mutate the input, output or options during export. Caller-owned streams can contain partial output on failure and must be discarded.
 
@@ -197,7 +198,7 @@ report.SaveAs("report.xlsx");
 
 This report builder uses an **in-memory workbook**, so use `WriteExcelStreamingAsync` instead for very large exports.
 
-## Cancellation and memory characteristics (v2.1 development)
+## Cancellation and memory characteristics (v2.1)
 
 Async exports accept cancellation tokens. Cancellation is cooperative: row construction and streaming enumeration check the token, and asynchronous I/O receives it where supported. ClosedXML workbook saving, auto-fit, XML serialization internals, and ZIP finalization may be synchronous and cannot always be interrupted immediately. A caller-owned stream remains open; discard its contents after cancellation or failure, since partial bytes may already have been written. CSV and direct-ZIP XLSX streaming APIs avoid buffering all source rows; `FromObjects`, JSON/XML exports, buffered XLSX and the report builder retain data in memory. Stream output alone is not a low-memory guarantee.
 
@@ -325,4 +326,4 @@ MIT. See [LICENSE](LICENSE).
 
 ## Additional v2.1 performance checks
 
-Run `dotnet run -c Release --project benchmarks/DataExport.Benchmarks -- --delimited-stress csv 1000000` (or `tsv`) to generate and verify every record in a synthetic large export. Run the same project with `--progress` to compare enabled and disabled CSV progress. See [draft release notes](https://github.com/Shahriyor187/DataExport/blob/master/docs/RELEASE_V2_1_NOTES.md). These are workload-specific measurements, not guarantees.
+Run `dotnet run -c Release --project benchmarks/DataExport.Benchmarks -- --delimited-stress csv 1000000` (or `tsv`) to generate and verify every record in a synthetic large export. Run the same project with `--progress` to compare enabled and disabled CSV progress. See [v2.1.0 release notes](https://github.com/Shahriyor187/DataExport/blob/master/docs/RELEASE_V2_1_NOTES.md). These are workload-specific measurements, not guarantees.
